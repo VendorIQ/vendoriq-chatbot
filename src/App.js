@@ -14,50 +14,66 @@ function App() {
   ]);
   const [step, setStep] = useState(0);
   const [typing, setTyping] = useState(false);
+  const [typingBuffer, setTypingBuffer] = useState("");
+
+  // Utility: Simulate bot typing char-by-char
+  const typeBotMessage = (fullMessage) => {
+    let index = 0;
+    setTypingBuffer("");
+    setTyping(true);
+
+    const interval = setInterval(() => {
+      setTypingBuffer((prev) => prev + fullMessage.charAt(index));
+      index++;
+
+      if (index >= fullMessage.length) {
+        clearInterval(interval);
+        setTyping(false);
+        setMessages((prev) => [...prev, { from: "bot", text: fullMessage }]);
+        setTypingBuffer("");
+      }
+    }, 30);
+  };
 
   const handleAnswer = (answer) => {
     const currentQuestion = questions[step];
-
-    // Show user response
     setMessages((prev) => [...prev, { from: "user", text: answer }]);
 
-    // Simulate bot typing
-    setTyping(true);
+    const botResponse =
+      answer === "Yes"
+        ? "Great! Please upload your supporting documents."
+        : "We recommend implementing this for better compliance.";
 
     setTimeout(() => {
-      const botResponse =
-        answer === "Yes"
-          ? "Great! Please upload your supporting documents."
-          : "We recommend implementing this for better compliance.";
-
-      setMessages((prev) => [
-        ...prev,
-        { from: "bot", text: botResponse }
-      ]);
-      setTyping(false);
-
+      typeBotMessage(botResponse);
       if (answer === "No") {
-        setStep((s) => s + 1);
+        setTimeout(() => setStep((s) => s + 1), botResponse.length * 30 + 400);
       }
-    }, 700);
+    }, 600);
   };
 
   const handleFileUpload = (event) => {
     const files = Array.from(event.target.files).map((f) => f.name);
     setMessages((prev) => [
       ...prev,
-      { from: "user", text: `📎 Uploaded: ${files.join(", ")}` },
-      { from: "bot", text: "Thanks! Moving to the next question." }
+      { from: "user", text: `📎 Uploaded: ${files.join(", ")}` }
     ]);
-    setStep((s) => s + 1);
+    typeBotMessage("Thanks! Moving to the next question.");
+    setTimeout(() => setStep((s) => s + 1), 1500);
   };
 
   useEffect(() => {
-    if (step < questions.length && messages[messages.length - 1]?.from === "bot" && !typing) {
-      const nextQuestion = questions[step];
-      setMessages((prev) => [...prev, { from: "bot", text: nextQuestion }]);
+    if (
+      step < questions.length &&
+      !typing &&
+      typingBuffer === "" &&
+      messages[messages.length - 1]?.from !== "bot"
+    ) {
+      setTimeout(() => {
+        typeBotMessage(questions[step]);
+      }, 600);
     }
-  }, [step, typing]);
+  }, [step, typing, messages, typingBuffer]);
 
   return (
     <div style={{ fontFamily: "Arial", maxWidth: "600px", margin: "30px auto", padding: "20px" }}>
@@ -93,8 +109,26 @@ function App() {
           </div>
         ))}
 
-        {typing && (
-          <div style={{ color: "#aaa", marginTop: "10px" }}>VendorIQ is typing...</div>
+        {typingBuffer && (
+          <div style={{ display: "flex", alignItems: "center", marginBottom: "10px" }}>
+            <img
+              src={botAvatar}
+              alt="bot"
+              style={{ width: "30px", height: "30px", borderRadius: "50%", marginRight: "10px" }}
+            />
+            <div
+              style={{
+                background: "#fff",
+                padding: "10px 15px",
+                borderRadius: "15px",
+                fontFamily: "monospace",
+                fontSize: "15px"
+              }}
+            >
+              {typingBuffer}
+              <span className="blinking-cursor">|</span>
+            </div>
+          </div>
         )}
 
         {!typing && step < questions.length && (
@@ -104,13 +138,14 @@ function App() {
           </div>
         )}
 
-        {!typing && messages[messages.length - 1]?.text?.includes("upload") && (
-          <div style={{ marginTop: "10px" }}>
-            <input type="file" multiple onChange={handleFileUpload} />
-          </div>
-        )}
+        {!typing &&
+          messages[messages.length - 1]?.text?.includes("upload") && (
+            <div style={{ marginTop: "10px" }}>
+              <input type="file" multiple onChange={handleFileUpload} />
+            </div>
+          )}
 
-        {step >= questions.length && !typing && (
+        {step >= questions.length && !typing && !typingBuffer && (
           <div style={{ marginTop: "20px", fontWeight: "bold", color: "green" }}>
             ✅ Interview Complete — Your responses have been saved.
           </div>
