@@ -1,38 +1,97 @@
-.App {
+.chat-container {
+  font-family: Arial, sans-serif;
+  max-width: 600px;
+  margin: 30px auto;
+  padding: 20px;
+}
+
+.chat-heading {
   text-align: center;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+.chat-box {
+  background: #f2f2f2;
+  border-radius: 10px;
+  padding: 20px;
+  min-height: 400px;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+.chat-bubble-wrapper {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  margin-bottom: 10px;
+  animation: fadeIn 0.4s ease;
 }
 
-.App-link {
-  color: #61dafb;
+.chat-bubble-wrapper.left {
+  justify-content: flex-start;
 }
 
-@keyframes App-logo-spin {
+.chat-bubble-wrapper.right {
+  justify-content: flex-end;
+}
+
+.chat-bubble {
+  padding: 10px 15px;
+  border-radius: 15px;
+  max-width: 75%;
+}
+
+.chat-bubble.bot {
+  background: #fff;
+  color: #000;
+}
+
+.chat-bubble.user {
+  background: #007bff;
+  color: #fff;
+}
+
+.bot-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  margin-right: 10px;
+}
+
+.typing {
+  font-family: monospace;
+}
+
+.cursor {
+  animation: blink 1s step-start infinite;
+}
+
+.button-group {
+  margin-top: 20px;
+}
+
+.button-group button {
+  margin-right: 10px;
+}
+
+.upload-input {
+  margin-top: 10px;
+}
+
+.completion-message {
+  margin-top: 20px;
+  font-weight: bold;
+  color: green;
+}
+
+@keyframes fadeIn {
   from {
-    transform: rotate(0deg);
+    opacity: 0;
+    transform: translateY(10px);
   }
   to {
-    transform: rotate(360deg);
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
   }
 }
