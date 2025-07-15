@@ -1,102 +1,126 @@
 import React, { useState, useEffect } from "react";
-import "./App.css"; // Import the animation styles
+import "./App.css";
 
 const botAvatar = "https://cdn-icons-png.flaticon.com/512/4712/4712109.png";
 
-function App() {
-  const questions = [
-    "Do you have ISO 9001 certification?",
-    "Do you perform regular internal audits?",
-    "Do you maintain a supplier code of conduct?"
-  ];
+const questions = [
+  {
+    text: "Does your Company have a written OHS Policy that has been approved by your top management and has been communicated throughout the organization and to your subcontractors (when applicable)?",
+    yesScore: 10,
+    noScore: 5,
+    failIfNo: false,
+    yesUploads: [
+      "A copy of the OHS Policy",
+      "Evidence of how the OHS Policy has been communicated to employees/subcontractors"
+    ],
+    noFeedback: "Consider obtaining ISO 9001 for better market compliance."
+  },
+  {
+    text: "Has your Company committed any infringements to the laws or regulations concerning Occupational Health & Safety (OHS) matters in the last three (03) years or is under any current investigation by any regulatory authority?",
+    yesScore: 10,
+    noScore: 0,
+    failIfNo: true,
+    yesUploads: [
+      "A declaration from your top management signed off on company letterhead",
+      "A documented process for identification and assessment of legal requirements",
+      "A list of all OHS requirements including laws and regulations",
+      "A recent legal compliance check report with corrective actions"
+    ],
+    noFeedback: "Failure to comply will result in automatic disqualification."
+  },
+  {
+    text: "Does the company have a process for Incident Reporting and Investigation that meets local regulations and Ericsson's OHS Requirements?",
+    yesScore: 10,
+    noScore: 0,
+    failIfNo: true,
+    yesUploads: [
+      "A documented incident reporting process",
+      "Evidence of communication to employees/subcontractors",
+      "Incident investigation reports with root causes and actions",
+      "Records on work-related fatalities or serious incidents (3 years)",
+      "Statistics from the last 3 years on incidents, near misses, illnesses"
+    ],
+    noFeedback: "Failure to comply will result in automatic disqualification."
+  }
+];
 
+function App() {
   const [messages, setMessages] = useState([
-    { from: "bot", text: "Welcome to the VendorIQ Supplier Interview!" }
+    { from: "bot", text: "Welcome to the VendorIQ Supplier Compliance Interview." }
   ]);
   const [step, setStep] = useState(0);
-  const [typing, setTyping] = useState(false);
-  const [typingBuffer, setTypingBuffer] = useState("");
+  const [score, setScore] = useState(0);
   const [expectingUpload, setExpectingUpload] = useState(false);
+  const [typingBuffer, setTypingBuffer] = useState("");
+  const [typing, setTyping] = useState(false);
+  const [disqualified, setDisqualified] = useState(false);
 
-  const typeBotMessage = (fullMessage, callback) => {
-    let index = 0;
+  const typeBotMessage = (text, callback) => {
+    let i = 0;
     setTypingBuffer("");
     setTyping(true);
-
     const interval = setInterval(() => {
-      setTypingBuffer((prev) => prev + fullMessage.charAt(index));
-      index++;
-
-      if (index >= fullMessage.length) {
+      setTypingBuffer((prev) => prev + text.charAt(i));
+      i++;
+      if (i >= text.length) {
         clearInterval(interval);
         setTyping(false);
-        setMessages((prev) => [...prev, { from: "bot", text: fullMessage }]);
+        setMessages((prev) => [...prev, { from: "bot", text }]);
         setTypingBuffer("");
-
         if (callback) callback();
       }
-    }, 30);
+    }, 20);
   };
 
   const handleAnswer = (answer) => {
+    const q = questions[step];
+    const isYes = answer === "Yes";
+
     setMessages((prev) => [...prev, { from: "user", text: answer }]);
+    setScore((prev) => prev + (isYes ? q.yesScore : q.noScore));
 
-    const botResponse =
-      answer === "Yes"
-        ? "Great! Please upload your supporting documents."
-        : "We recommend implementing this for better compliance.";
+    if (!isYes && q.failIfNo) {
+      setDisqualified(true);
+      typeBotMessage(q.noFeedback);
+      return;
+    }
 
-    setExpectingUpload(answer === "Yes");
-
-    setTimeout(() => {
-      typeBotMessage(botResponse, () => {
-        if (answer === "No") {
-          setTimeout(() => setStep((s) => s + 1), 600);
-        }
+    if (isYes && q.yesUploads.length > 0) {
+      setExpectingUpload(true);
+      typeBotMessage("Great. Please upload the following:");
+      q.yesUploads.forEach((item) =>
+        setTimeout(() => setMessages((prev) => [...prev, { from: "bot", text: `- ${item}` }]), 600)
+      );
+    } else {
+      typeBotMessage(isYes ? "Thank you. Moving on..." : q.noFeedback, () => {
+        setTimeout(() => setStep((s) => s + 1), 800);
       });
-    }, 600);
+    }
   };
 
-  const handleFileUpload = (event) => {
-    const files = Array.from(event.target.files).map((f) => f.name);
-    setMessages((prev) => [
-      ...prev,
-      { from: "user", text: `📎 Uploaded: ${files.join(", ")}` }
-    ]);
+  const handleFileUpload = (e) => {
+    const files = Array.from(e.target.files).map((f) => f.name).join(", ");
+    setMessages((prev) => [...prev, { from: "user", text: `📎 Uploaded: ${files}` }]);
     setExpectingUpload(false);
-    typeBotMessage("Thanks! Moving to the next question.", () => {
-      setTimeout(() => setStep((s) => s + 1), 500);
+    typeBotMessage("Thanks! Let's move on.", () => {
+      setTimeout(() => setStep((s) => s + 1), 800);
     });
   };
 
   useEffect(() => {
-    if (
-      step < questions.length &&
-      !typing &&
-      typingBuffer === "" &&
-      messages[messages.length - 1]?.from !== "bot"
-    ) {
-      setTimeout(() => {
-        typeBotMessage(questions[step]);
-      }, 600);
+    if (!typing && !typingBuffer && !disqualified && step < questions.length) {
+      typeBotMessage(questions[step].text);
     }
-  }, [step, typing, messages, typingBuffer]);
+  }, [step, typing, typingBuffer, disqualified]);
 
   return (
     <div className="chat-container">
       <h2 className="chat-heading">VendorIQ Supplier Chatbot</h2>
       <div className="chat-box">
-        {messages.map((msg, index) => (
-          <div
-            key={index}
-            className={`chat-bubble-wrapper ${msg.from === "user" ? "right" : "left"}`}
-          >
-            {msg.from === "bot" && (
-              <img src={botAvatar} alt="bot" className="bot-avatar" />
-            )}
-            <div className={`chat-bubble ${msg.from}`}>
-              {msg.text}
-            </div>
+        {messages.map((msg, i) => (
+          <div key={i} className={`chat-bubble-wrapper ${msg.from === "user" ? "right" : "left"}`}>
+            {msg.from === "bot" && <img src={botAvatar} alt="bot" className="bot-avatar" />}
+            <div className={`chat-bubble ${msg.from}`}>{msg.text}</div>
           </div>
         ))}
 
@@ -107,7 +131,7 @@ function App() {
           </div>
         )}
 
-        {!typing && step < questions.length && !expectingUpload && (
+        {!typing && !expectingUpload && !disqualified && step < questions.length && (
           <div className="button-group">
             <button onClick={() => handleAnswer("Yes")}>Yes</button>
             <button onClick={() => handleAnswer("No")}>No</button>
@@ -120,9 +144,15 @@ function App() {
           </div>
         )}
 
-        {step >= questions.length && !typing && !typingBuffer && (
+        {!typing && step >= questions.length && !disqualified && (
           <div className="completion-message">
-            ✅ Interview Complete — Your responses have been saved.
+            ✅ Interview Complete — Total Score: <strong>{score}/30</strong>
+          </div>
+        )}
+
+        {disqualified && (
+          <div className="completion-message" style={{ color: "red" }}>
+            ❌ You did not meet the required compliance threshold. Assessment failed.
           </div>
         )}
       </div>
