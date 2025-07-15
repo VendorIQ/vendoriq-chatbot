@@ -111,10 +111,13 @@ function App() {
   };
 
   useEffect(() => {
-    if (!typing && !typingBuffer && !disqualified && !messageQueued && step < questions.length) {
-      typeBotMessage(questions[step].text);
+    const currentQuestionText = questions[step]?.text;
+    const hasAlreadyAsked = messages.some((msg) => msg.from === "bot" && msg.text === currentQuestionText);
+
+    if (!typing && !typingBuffer && !disqualified && !messageQueued && step < questions.length && !hasAlreadyAsked) {
+      typeBotMessage(currentQuestionText);
     }
-  }, [step, typing, typingBuffer, disqualified, messageQueued]);
+  }, [step, typing, typingBuffer, disqualified, messageQueued, messages]);
 
   return (
     <div className="chat-container">
