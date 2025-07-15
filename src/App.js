@@ -57,10 +57,10 @@ function App() {
 
   const typeBotMessage = (text) => {
     setTyping(true);
-    setTypingBuffer(text.charAt(0));
-    let index = 1;
+    setTypingBuffer("");
+    let index = 0;
     const interval = setInterval(() => {
-      setTypingBuffer((prev) => prev + text.charAt(index));
+      setTypingBuffer((prev) => prev + text[index]);
       index++;
       if (index >= text.length) {
         clearInterval(interval);
@@ -109,7 +109,7 @@ function App() {
     setTyping(false);
     setTypingBuffer("");
     setDisqualified(false);
-    setScore(prev => prev - questions[step].weight["Yes"]); // assuming only Yes will allow redo
+    setScore(prev => prev - questions[step].weight["Yes"]);
     typeBotMessage(questions[step].text);
   };
 
@@ -159,14 +159,6 @@ function App() {
           </div>
         )}
 
-        {(step === 1 || step === 2) && !disqualified && !typing && (
-          <div style={{ marginTop: "20px" }}>
-            <button onClick={handleRestartStep} style={{ backgroundColor: "#f0ad4e", color: "white", border: "none", padding: "8px 16px", borderRadius: "4px" }}>
-              Restart This Question
-            </button>
-          </div>
-        )}
-
         {step >= questions.length && !disqualified && (
           <div style={{ marginTop: "30px", padding: "20px", background: "#e3f2fd", borderRadius: "8px" }}>
             <h3>✅ Interview Complete</h3>
@@ -179,6 +171,11 @@ function App() {
           <div style={{ marginTop: "30px", padding: "20px", background: "#ffebee", borderRadius: "8px" }}>
             <h3>❌ Disqualified</h3>
             <p>{questions[step]?.consequence}</p>
+            <div style={{ marginTop: "20px" }}>
+              <button onClick={handleRestartStep} style={{ backgroundColor: "#f0ad4e", color: "white", border: "none", padding: "8px 16px", borderRadius: "4px" }}>
+                Restart This Question
+              </button>
+            </div>
           </div>
         )}
       </div>
