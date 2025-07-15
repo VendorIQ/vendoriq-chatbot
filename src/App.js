@@ -7,7 +7,6 @@ function App() {
   const [typing, setTyping] = useState(false);
   const [typingBuffer, setTypingBuffer] = useState("");
   const [uploadInputs, setUploadInputs] = useState([]);
-  const [uploadedFiles, setUploadedFiles] = useState({});
   const [score, setScore] = useState(0);
   const [disqualified, setDisqualified] = useState(false);
   const [messageQueued, setMessageQueued] = useState(false);
@@ -58,7 +57,8 @@ function App() {
 
   const typeBotMessage = (text) => {
     setTyping(true);
-    let index = 0;
+    setTypingBuffer(text.charAt(0));
+    let index = 1;
     const interval = setInterval(() => {
       setTypingBuffer((prev) => prev + text.charAt(index));
       index++;
@@ -84,7 +84,6 @@ function App() {
 
     if (answer === "Yes" && current.requirements.length > 0) {
       setUploadInputs(current.requirements);
-      setUploadedFiles({});
     } else {
       setStep(prev => prev + 1);
     }
@@ -92,18 +91,26 @@ function App() {
     setScore(prev => prev + current.weight[answer]);
   };
 
-  const handleFileChange = (label, file) => {
-    setUploadedFiles(prev => ({ ...prev, [label]: file }));
+  const handleFilesUploaded = () => {
+    setUploadInputs([]);
+    setMessages(prev => [...prev, { from: "bot", text: "✅ Documents uploaded. Moving on..." }]);
+    setStep(prev => prev + 1);
   };
 
-  const handleFilesUploaded = () => {
-    if (uploadInputs.every(label => uploadedFiles[label])) {
-      setUploadInputs([]);
-      setMessages(prev => [...prev, { from: "bot", text: "✅ Documents uploaded. Moving on..." }]);
-      setStep(prev => prev + 1);
-    } else {
-      alert("Please upload all required documents before proceeding.");
+  const handleRestartStep = () => {
+    const newMessages = [...messages];
+    const lastQuestion = questions[step]?.text;
+    const lastQuestionIndex = newMessages.findIndex(m => m.text === lastQuestion);
+    if (lastQuestionIndex !== -1) {
+      newMessages.splice(lastQuestionIndex);
     }
+    setMessages(newMessages);
+    setUploadInputs([]);
+    setTyping(false);
+    setTypingBuffer("");
+    setDisqualified(false);
+    setScore(prev => prev - questions[step].weight["Yes"]); // assuming only Yes will allow redo
+    typeBotMessage(questions[step].text);
   };
 
   return (
@@ -145,10 +152,18 @@ function App() {
             {uploadInputs.map((label, idx) => (
               <div key={idx} style={{ marginBottom: "10px" }}>
                 <label>{label}</label>
-                <input type="file" onChange={(e) => handleFileChange(label, e.target.files[0])} />
+                <input type="file" />
               </div>
             ))}
             <button onClick={handleFilesUploaded} style={{ marginTop: "10px" }}>Submit Documents</button>
+          </div>
+        )}
+
+        {(step === 1 || step === 2) && !disqualified && !typing && (
+          <div style={{ marginTop: "20px" }}>
+            <button onClick={handleRestartStep} style={{ backgroundColor: "#f0ad4e", color: "white", border: "none", padding: "8px 16px", borderRadius: "4px" }}>
+              Restart This Question
+            </button>
           </div>
         )}
 
