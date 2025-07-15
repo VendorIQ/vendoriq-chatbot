@@ -54,11 +54,13 @@ function App() {
   const [typingBuffer, setTypingBuffer] = useState("");
   const [typing, setTyping] = useState(false);
   const [disqualified, setDisqualified] = useState(false);
+  const [messageQueued, setMessageQueued] = useState(false);
 
   const typeBotMessage = (text, callback) => {
     let i = 0;
     setTypingBuffer("");
     setTyping(true);
+    setMessageQueued(true);
     const interval = setInterval(() => {
       setTypingBuffer((prev) => prev + text.charAt(i));
       i++;
@@ -67,6 +69,7 @@ function App() {
         setTyping(false);
         setMessages((prev) => [...prev, { from: "bot", text }]);
         setTypingBuffer("");
+        setMessageQueued(false);
         if (callback) callback();
       }
     }, 20);
@@ -88,8 +91,8 @@ function App() {
     if (isYes && q.yesUploads.length > 0) {
       setExpectingUpload(true);
       typeBotMessage("Great. Please upload the following:");
-      q.yesUploads.forEach((item) =>
-        setTimeout(() => setMessages((prev) => [...prev, { from: "bot", text: `- ${item}` }]), 600)
+      q.yesUploads.forEach((item, idx) =>
+        setTimeout(() => setMessages((prev) => [...prev, { from: "bot", text: `- ${item}` }]), 600 * (idx + 1))
       );
     } else {
       typeBotMessage(isYes ? "Thank you. Moving on..." : q.noFeedback, () => {
@@ -108,10 +111,10 @@ function App() {
   };
 
   useEffect(() => {
-    if (!typing && !typingBuffer && !disqualified && step < questions.length) {
+    if (!typing && !typingBuffer && !disqualified && !messageQueued && step < questions.length) {
       typeBotMessage(questions[step].text);
     }
-  }, [step, typing, typingBuffer, disqualified]);
+  }, [step, typing, typingBuffer, disqualified, messageQueued]);
 
   return (
     <div className="chat-container">
