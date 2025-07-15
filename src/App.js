@@ -7,8 +7,8 @@ function App() {
   const [feedback, setFeedback] = useState("");
 
   const questions = [
-    "Do you have ISO 9001 certification?",
-    "Do you perform regular internal audits?",
+    "Do you have ISO 9001    certification?",
+    "Do you perform regular    internal audits?",
     "Do you maintain a supplier code of conduct?"
   ];
 
