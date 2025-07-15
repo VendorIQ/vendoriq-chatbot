@@ -7,8 +7,8 @@ function App() {
   const [feedback, setFeedback] = useState("");
 
   const questions = [
-    "Do you have ISO 9001    certification?",
-    "Do you perform regular    internal audits?",
+    "Do you have ISO 9001 certification?",
+    "Do you perform regular internal audits?",
     "Do you maintain a supplier code of conduct?"
   ];
 
@@ -65,7 +65,7 @@ function App() {
 
   return (
     <div style={{ padding: "20px", fontFamily: "Arial, sans-serif" }}>
-      <h1 style={{ textAlign: "center" }}>VendorIQ Chatbot UI</h1>
+      <h1 style={{ textAlign: "center" }}>VendorIQ Supplier Chatbot</h1>
       <div style={{ maxWidth: "600px", margin: "40px auto", background: "#f8f8f8", padding: "20px", borderRadius: "8px" }}>
         {renderQuestion()}
       </div>
