@@ -1,263 +1,122 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
-import "./App.css"; // You need to update this with the CSS below
+import "./App.css";
+
+const supplierId = "SUP123";
+const supplierEmail = "abc@vendor.com";
+
+const questions = [
+  {
+    text: "Does your Company have a written OHS Policy that has been approved by your top management and has been communicated throughout the organization and to your subcontractors (when applicable)?",
+    weight: { Yes: 10, No: 5 },
+    requirements: [
+      "A copy of the OHS Policy",
+      "Evidence of how the OHS Policy has been communicated to employees (if available subcontractors) (i.e. Email, training, notice boards)"
+    ],
+    consequence: "Consider obtaining ISO 9001 for better market compliance."
+  },
+  {
+    text: "Has your Company committed any infringements to the laws or regulations concerning Occupational Health & Safety (OHS) matters in the last three (03) years or is under any current investigation by, or in discussions with, any regulatory authority in respect of any OHS matters, accident or alleged breach of OHS laws or regulations?",
+    weight: { Yes: 10, No: 0 },
+    requirements: [
+      "A declaration from your top management that your company has not committed any infringements to the laws or regulations or is not under any current investigation by any regulatory authority in respect of any OHS matters (Statement should be signed off by CEO with official letterhead, stamp, etc.)",
+      "A copy of the documented process or the systematic identification and assessment of legal applicable laws and regulations (i.e. procedure, instruction)",
+      "A list of all OHS requirements including laws and regulations that the Company has identified as applicable",
+      "A report of the legal compliance check conducted within the last twelve (12) months and corrective action plan to close any gaps identified"
+    ],
+    consequence: "Failure to comply this, Supplier will be direcly failed the assessment"
+  },
+  {
+    text: "Does the company have a process for Incident Reporting and Investigation, including a system for recording safety incidents (near misses, injuries, fatalities etc.) that meets local regulations and Ericsson's OHS Requirements at a minimum?",
+    weight: { Yes: 10, No: 0 },
+    requirements: [
+      "A copy of the documented process (i.e. procedure, instruction)",
+      "Evidence of how the process has been communicated to employees (if available subcontractors) (i.e. Email, training, notice boards)",
+      "Evidence of investigations, identified root causes and action plans for incidents and near misses (i.e. investigation reports) (excluding personal identifiable information)",
+      "Records if the Company had any work-related fatality and/or incidents (internal employee, sub-contractors, or external party) that caused permanent disability or absence of over thirty (30) days in the last three (03) years. Evidence requested includes; 1. If yes, the Company must provide the investigation report/s, and corrective action plans to prevent re-occurrence, including a status report on the corrective actions. 2. If not, the Company must provide a declaration from its top management that there has not been any work-related fatality and/or incident that caused permanent disability or absence of over thirty (30) days in the last three (03) years.",
+      "Last three (03) years statistics including incidents, near misses, fatalities, work related illness"
+    ],
+    consequence: "Failure to comply this, Supplier will be direcly failed the assessment"
+  }
+];
 
 function App() {
-  // Demo hardcoded for now
-  const supplierId = "SUP123";
-  const supplierEmail = "abc@vendor.com";
-
-  const [step, setStep] = useState(0);
   const [messages, setMessages] = useState([
     { from: "bot", text: "Welcome to the VendorIQ Supplier Compliance Interview." }
   ]);
   const [typing, setTyping] = useState(false);
   const [typingBuffer, setTypingBuffer] = useState("");
-  const [uploadInputs, setUploadInputs] = useState([]);
+  const [step, setStep] = useState(0);
   const [score, setScore] = useState(0);
   const [disqualified, setDisqualified] = useState(false);
+  const [uploadInputs, setUploadInputs] = useState([]);
+  const [uploadFiles, setUploadFiles] = useState({});
   const [reportFeedback, setReportFeedback] = useState([]);
-  const [files, setFiles] = useState({});
-  const [uploadError, setUploadError] = useState("");
-  const [restarting, setRestarting] = useState(false);
+  const [showRestart, setShowRestart] = useState(false);
+  const chatBottomRef = useRef(null);
 
-  // Questions
-  const questions = [
-    {
-      text: "Does your Company have a written OHS Policy that has been approved by your top management and has been communicated throughout the organization and to your subcontractors (when applicable)?",
-      weight: { Yes: 10, No: 5 },
-      requirements: [
-        "A copy of the OHS Policy",
-        "Evidence of how the OHS Policy has been communicated to employees/subcontractors"
-      ],
-      consequence: "Consider obtaining ISO 9001 for better market compliance."
-    },
-    {
-      text: "Has your Company committed any infringements to the laws or regulations concerning OHS matters in the last 3 years or is under investigation by any regulatory authority?",
-      weight: { Yes: 10, No: 0 },
-      requirements: [
-        "Declaration from top management (signed/stamped)",
-        "Documented process for legal assessment",
-        "List of all OHS requirements incl. laws/regulations",
-        "Legal compliance report & corrective plan"
-      ],
-      consequence: "Failure to comply this, Supplier will be directly failed the assessment"
-    },
-    {
-      text: "Does the company have a process for Incident Reporting and Investigation, including a system for recording safety incidents (near misses, injuries, fatalities etc.) that meets local regulations and Ericsson's OHS Requirements at a minimum?",
-      weight: { Yes: 10, No: 0 },
-      requirements: [
-        "Documented process (procedure/instruction)",
-        "Evidence of communication to employees/subcontractors",
-        "Investigation reports, root causes & action plans (no PII)",
-        "Fatality/incident declaration and/or report for last 3 years",
-        "Last 3 years incident, near misses, fatalities statistics"
-      ],
-      consequence: "Failure to comply this, Supplier will be directly failed the assessment"
-    }
-  ];
-
-  // --- Handle Typing Animation ---
+  // Smooth scroll to latest message
   useEffect(() => {
-    if (restarting) return;
-    if (typing || typingBuffer || disqualified) return;
+    if (chatBottomRef.current) {
+      chatBottomRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, typingBuffer, uploadInputs, disqualified]);
 
+  // Type out next bot question if appropriate
+  useEffect(() => {
+    if (typing || disqualified || step >= questions.length) return;
+    // If just started, after welcome message, show first question
     if (step < questions.length && !messages.some(m => m.text === questions[step].text)) {
-      let idx = 0;
-      setTyping(true);
-      setTypingBuffer("");
-      const fullText = questions[step].text;
-
-      const interval = setInterval(() => {
-        setTypingBuffer(fullText.slice(0, idx + 1));
-        idx++;
-        if (idx >= fullText.length) {
-          clearInterval(interval);
-          setTyping(false);
-          setTypingBuffer("");
-          setMessages(prev => [...prev, { from: "bot", text: fullText }]);
-        }
-      }, 12);
-      return () => clearInterval(interval);
+      startTyping(questions[step].text);
     }
-    // eslint-disable-next-line
-  }, [step, typing, typingBuffer, disqualified, restarting]);
+  }, [step, typing, disqualified, messages]);
 
-  // --- Save to Edge Function (report) ---
-  useEffect(() => {
-    if (step === questions.length && !disqualified) {
-      fetch(process.env.REACT_APP_FUNCTION_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          email: supplierEmail,
-          score,
-          feedback: reportFeedback,
-        }),
-      });
-    }
-    // eslint-disable-next-line
-  }, [step, disqualified]);
+  // Typing effect
+  const startTyping = (text, delay = 12) => {
+    setTyping(true);
+    setTypingBuffer("");
+    let index = 0;
+    const interval = setInterval(() => {
+      setTypingBuffer(text.slice(0, index + 1));
+      index++;
+      if (index >= text.length) {
+        clearInterval(interval);
+        setTyping(false);
+        setMessages(prev => [...prev, { from: "bot", text }]);
+        setTypingBuffer("");
+      }
+    }, delay);
+  };
 
-  // --- Handle answer buttons ---
-  const handleAnswer = (answer) => {
-    if (typing || typingBuffer) return;
+  // Handle answer click
+  const handleAnswer = async (answer) => {
     setMessages(prev => [...prev, { from: "user", text: answer }]);
-    const q = questions[step];
+    const current = questions[step];
+    const points = current.weight[answer];
 
-    // Save to DB
-    supabase.from("responses").insert({
+    // Save answer to DB (optional, comment if not needed)
+    await supabase.from("responses").insert({
       supplier_email: supplierEmail,
       question_index: step,
       answer,
-      score: q.weight[answer],
+      score: points
     });
 
-    const feedbackMsg = answer === "No"
-      ? `❗ ${q.consequence}`
-      : `✅ Good. Please ensure all required documents are uploaded.`;
-    setReportFeedback(prev => [...prev, `Q${step + 1}: ${answer} - ${feedbackMsg}`]);
-
-    if (answer === "No" && q.weight["No"] === 0) {
-      setMessages(prev => [...prev, { from: "bot", text: q.consequence }]);
+    if (answer === "No" && points === 0) {
+      // Disqualify immediately
+      setMessages(prev => [
+        ...prev,
+        { from: "bot", text: `❌ Disqualified: ${current.consequence}` }
+      ]);
       setDisqualified(true);
+      setShowRestart(true);
+      setReportFeedback(prev => [
+        ...prev,
+        `Q${step + 1}: ❌ Disqualified - ${current.consequence}`
+      ]);
       return;
     }
 
-    if (answer === "Yes" && q.requirements.length > 0) {
-      setUploadInputs(q.requirements);
-      setFiles({});
-    } else {
-      setScore(prev => prev + q.weight[answer]);
-      setStep(prev => prev + 1);
-    }
-  };
-
-  // --- Handle file change and force all fields ---
-  const handleFileChange = (e, idx) => {
-    const f = { ...files, [idx]: e.target.files[0] };
-    setFiles(f);
-    setUploadError("");
-  };
-
-  // --- Submit uploads, only allow if all provided ---
-  const handleFilesUploaded = async () => {
-    setUploadError("");
-    if (uploadInputs.length === 0) return;
-
-    let missing = uploadInputs.find((_, idx) => !files[idx]);
-    if (missing) {
-      setUploadError("Please upload all required documents.");
-      return;
-    }
-    const folderPrefix = `uploads/${supplierId}_${supplierEmail}/question-${step + 1}`;
-    let uploadedFiles = 0;
-    for (let idx = 0; idx < uploadInputs.length; idx++) {
-      const file = files[idx];
-      if (!file) continue;
-      const path = `${folderPrefix}/${file.name}`;
-      const { error } = await supabase.storage.from("uploads").upload(path, file, { upsert: true });
-      if (!error) uploadedFiles++;
-      else setUploadError(error.message);
-    }
-    setReportFeedback(prev => [...prev, `📎 ${uploadedFiles} document(s) uploaded for question ${step + 1}.`]);
-    setScore(prev => prev + questions[step].weight["Yes"]);
-    setUploadInputs([]);
-    setMessages(prev => [...prev, { from: "bot", text: "✅ Files uploaded. Moving on..." }]);
-    setStep(prev => prev + 1);
-  };
-
-  // --- Restart everything after disqualified ---
-  const handleRestart = () => {
-    setRestarting(true);
-    setTimeout(() => {
-      setStep(0);
-      setMessages([{ from: "bot", text: "Welcome to the VendorIQ Supplier Compliance Interview." }]);
-      setTyping(false);
-      setTypingBuffer("");
-      setUploadInputs([]);
-      setScore(0);
-      setDisqualified(false);
-      setReportFeedback([]);
-      setFiles({});
-      setUploadError("");
-      setRestarting(false);
-    }, 250);
-  };
-
-  // --- Render Report ---
-  const renderFinalReport = () => (
-    <div className="complete-box">
-      <h3>✅ Assessment Complete</h3>
-      <p>Score: {score}</p>
-      <div>
-        <h4>Feedback Summary:</h4>
-        <ul>
-          {reportFeedback.map((line, idx) => (
-            <li key={idx}>{line}</li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  );
-
-  // --- Render Disqualified ---
-  const renderDisqualified = () => (
-    <div className="disqualified-box">
-      <h3>❌ Disqualified</h3>
-      <p>{questions[step]?.consequence}</p>
-      <button className="restart-btn" onClick={handleRestart}>Restart Assessment</button>
-    </div>
-  );
-
-  return (
-    <div className="chat-container">
-      <h1>VendorIQ Chatbot</h1>
-
-      {messages.map((msg, idx) => (
-        <div key={idx} className={`bubble ${msg.from}`}>
-          {msg.text}
-        </div>
-      ))}
-      {typing && <div className="bubble bot typing">{typingBuffer}</div>}
-
-      {!typing && !disqualified && uploadInputs.length === 0 && step < questions.length && (
-        <div className="button-group">
-          <button onClick={() => handleAnswer("Yes")}>Yes</button>
-          <button onClick={() => handleAnswer("No")}>No</button>
-        </div>
-      )}
-
-      {uploadInputs.length > 0 && (
-        <div className="upload-section">
-          <h4>Upload required documents:</h4>
-          {uploadInputs.map((label, idx) => (
-            <div key={idx} style={{ marginBottom: 8 }}>
-              <label>{label}:</label>
-              <input
-                type="file"
-                onChange={e => handleFileChange(e, idx)}
-              />
-            </div>
-          ))}
-          {uploadError && <div className="error-msg">{uploadError}</div>}
-          <button
-            onClick={handleFilesUploaded}
-            disabled={uploadInputs.some((_, idx) => !files[idx])}
-          >
-            Submit Documents
-          </button>
-        </div>
-      )}
-
-      {step >= questions.length && !disqualified && renderFinalReport()}
-
-      {disqualified && renderDisqualified()}
-    </div>
-  );
-}
-
-export default App;
+    setReportFeedback(prev => [
+      ...prev,
+      `Q${step + 1}: ${answer} - ${answer === "Yes" ? "Good. Please upload all required documents." : current.con
