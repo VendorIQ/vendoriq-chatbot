@@ -64,7 +64,10 @@ function App() {
     if (step >= questions.length && !disqualified) {
       fetch(process.env.REACT_APP_FUNCTION_ENDPOINT, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`,
+        },
         body: JSON.stringify({
           email: supplierEmail,
           score,
