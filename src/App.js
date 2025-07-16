@@ -119,4 +119,172 @@ function App() {
 
     setReportFeedback(prev => [
       ...prev,
-      `Q${step + 1}: ${answer} - ${answer === "Yes" ? "Good. Please upload all required documents." : current.con
+      `Q${step + 1}: ${answer} - ${answer === "Yes" ? "Good. Please upload all required documents." : current.consequence}`
+    ]);
+
+    if (answer === "Yes" && current.requirements.length > 0) {
+      // Trigger upload for each required doc
+      setUploadInputs(current.requirements);
+      setUploadFiles({});
+    } else {
+      setScore(prev => prev + points);
+      setStep(prev => prev + 1);
+    }
+  };
+
+  // Handle file change for each requirement
+  const handleFileChange = (idx, file) => {
+    setUploadFiles(prev => ({ ...prev, [idx]: file }));
+  };
+
+  // Upload all required files for this question
+  const handleFilesUploaded = async () => {
+    if (uploadInputs.length !== Object.keys(uploadFiles).length) {
+      alert("Please upload all required documents before submitting.");
+      return;
+    }
+    // Upload to supabase
+    for (let i = 0; i < uploadInputs.length; i++) {
+      const file = uploadFiles[i];
+      if (!file) continue;
+      const folder = `uploads/${supplierId}_${supplierEmail}/question-${step + 1}`;
+      const path = `${folder}/${file.name}`;
+      const { error } = await supabase.storage.from("uploads").upload(path, file, { upsert: true });
+      if (error) {
+        alert("Upload failed: " + error.message);
+        return;
+      }
+    }
+    setMessages(prev => [...prev, { from: "bot", text: "✅ Files uploaded. Moving on..." }]);
+    setScore(prev => prev + questions[step].weight.Yes);
+    setUploadInputs([]);
+    setUploadFiles({});
+    setStep(prev => prev + 1);
+  };
+
+  // Restart if disqualified
+  const restart = () => {
+    setMessages([
+      { from: "bot", text: "Welcome to the VendorIQ Supplier Compliance Interview." }
+    ]);
+    setTyping(false);
+    setTypingBuffer("");
+    setStep(0);
+    setScore(0);
+    setDisqualified(false);
+    setUploadInputs([]);
+    setUploadFiles({});
+    setReportFeedback([]);
+    setShowRestart(false);
+  };
+
+  // Render chat bubbles
+  const renderMessages = () =>
+    messages.map((msg, idx) => (
+      <div key={idx} className={`bubble ${msg.from}`}>
+        {msg.text}
+      </div>
+    ));
+
+  // Render fade-in typing bubble
+  const renderTyping = () =>
+    typingBuffer && (
+      <div className="bubble bot typing">
+        {typingBuffer}
+      </div>
+    );
+
+  // Render document uploads
+  const renderUploads = () =>
+    uploadInputs.length > 0 && (
+      <div className="bubble bot upload">
+        <div>
+          <strong>Please upload the following documents:</strong>
+        </div>
+        {uploadInputs.map((label, idx) => (
+          <div key={idx} style={{ marginBottom: 10 }}>
+            <label>{label}</label>
+            <input
+              type="file"
+              onChange={e => handleFileChange(idx, e.target.files[0])}
+              style={{ marginLeft: 8 }}
+              accept=".pdf,.doc,.docx"
+            />
+          </div>
+        ))}
+        <button
+          className="submit-btn"
+          onClick={handleFilesUploaded}
+          disabled={uploadInputs.length !== Object.keys(uploadFiles).length}
+        >
+          Submit Documents
+        </button>
+      </div>
+    );
+
+  // Render answer buttons
+  const renderButtons = () =>
+    !typing &&
+    !disqualified &&
+    uploadInputs.length === 0 &&
+    step < questions.length && (
+      <div className="bubble user" style={{ background: "none", boxShadow: "none" }}>
+        <button onClick={() => handleAnswer("Yes")} className="answer-btn">Yes</button>
+        <button onClick={() => handleAnswer("No")} className="answer-btn">No</button>
+      </div>
+    );
+
+  // Render restart button
+  const renderRestart = () =>
+    showRestart && (
+      <div style={{ textAlign: "center", marginTop: 20 }}>
+        <button className="restart-btn" onClick={restart}>
+          Restart Assessment
+        </button>
+      </div>
+    );
+
+  // Render summary
+  const renderFinalReport = () =>
+    step >= questions.length && !disqualified && (
+      <div className="bubble bot complete">
+        <h3>✅ Assessment Complete</h3>
+        <p>Score: {score}</p>
+        <h4>Feedback Summary:</h4>
+        <ul>
+          {reportFeedback.map((line, idx) => (
+            <li key={idx}>{line}</li>
+          ))}
+        </ul>
+      </div>
+    );
+
+  // Render disqualified
+  const renderDisqualified = () =>
+    disqualified && (
+      <div className="bubble bot disqualified">
+        <h3>❌ Disqualified</h3>
+        <p>{questions[step]?.consequence}</p>
+      </div>
+    );
+
+  return (
+    <div className="chat-bg">
+      <div className="chat-window">
+        <h1>VendorIQ Chatbot</h1>
+        <div className="chat-area">
+          {renderMessages()}
+          {renderTyping()}
+          {renderUploads()}
+          {renderButtons()}
+          {renderFinalReport()}
+          {renderDisqualified()}
+          {renderRestart()}
+          <div ref={chatBottomRef} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default App;
