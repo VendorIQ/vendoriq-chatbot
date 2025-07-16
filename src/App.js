@@ -37,6 +37,18 @@ function App() {
         "Latest legal compliance report"
       ],
       consequence: "Failure to comply, supplier will be disqualified."
+    },
+    {
+      text: "Do you have an Incident Reporting and Investigation process?",
+      weight: { Yes: 10, No: 0 },
+      requirements: [
+        "Incident process document",
+        "Communication evidence",
+        "Investigation reports",
+        "Declaration or reports on work-related fatality/absence",
+        "Last 3 years incident statistics"
+      ],
+      consequence: "Failure to comply, supplier will be disqualified."
     }
   ];
 
@@ -50,7 +62,7 @@ function App() {
 
   useEffect(() => {
     if (step >= questions.length && !disqualified) {
-      fetch("https://nkszauzneezmdgmqykxy.functions.supabase.co/send-report", {
+      fetch(import.meta.env.VITE_FUNCTION_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -89,13 +101,10 @@ function App() {
         .insert({
           supplier_email: supplierEmail,
           question_index: step,
-          answer: answer,
+          answer,
           score: current.weight[answer],
         });
-
-      if (error) {
-        console.error("Failed to save response:", error.message);
-      }
+      if (error) console.error("Failed to save response:", error.message);
     };
     saveAnswerToDB();
 
@@ -127,12 +136,8 @@ function App() {
     for (let i = 0; i < inputs.length; i++) {
       const file = inputs[i].files[0];
       if (!file) continue;
-
       const path = `${folderPrefix}/${file.name}`;
-      const { error } = await supabase.storage
-        .from("uploads")
-        .upload(path, file, { upsert: true });
-
+      const { error } = await supabase.storage.from("uploads").upload(path, file, { upsert: true });
       if (error) {
         alert("Upload failed: " + error.message);
         return;
