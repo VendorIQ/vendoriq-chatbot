@@ -24,7 +24,7 @@ const questions = [
       "A list of all OHS requirements including laws and regulations that the Company has identified as applicable",
       "A report of the legal compliance check conducted within the last twelve (12) months and corrective action plan to close any gaps identified"
     ],
-    consequence: "Failure to comply this, Supplier will be direcly failed the assessment"
+    consequence: "Failure to comply this, Supplier will be directly failed the assessment"
   },
   {
     text: "Does the company have a process for Incident Reporting and Investigation, including a system for recording safety incidents (near misses, injuries, fatalities etc.) that meets local regulations and Ericsson's OHS Requirements at a minimum?",
@@ -36,7 +36,7 @@ const questions = [
       "Records if the Company had any work-related fatality and/or incidents (internal employee, sub-contractors, or external party) that caused permanent disability or absence of over thirty (30) days in the last three (03) years. Evidence requested includes; 1. If yes, the Company must provide the investigation report/s, and corrective action plans to prevent re-occurrence, including a status report on the corrective actions. 2. If not, the Company must provide a declaration from its top management that there has not been any work-related fatality and/or incident that caused permanent disability or absence of over thirty (30) days in the last three (03) years.",
       "Last three (03) years statistics including incidents, near misses, fatalities, work related illness"
     ],
-    consequence: "Failure to comply this, Supplier will be direcly failed the assessment"
+    consequence: "Failure to comply this, Supplier will be directly failed the assessment"
   }
 ];
 
@@ -55,24 +55,25 @@ function App() {
   const [showRestart, setShowRestart] = useState(false);
   const chatBottomRef = useRef(null);
 
-  // Smooth scroll to latest message
+  // SCROLL TO BOTTOM
   useEffect(() => {
     if (chatBottomRef.current) {
       chatBottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, typingBuffer, uploadInputs, disqualified]);
 
-  // Type out next bot question if appropriate
+  // Add question if needed (no duplicate!)
   useEffect(() => {
     if (typing || disqualified || step >= questions.length) return;
-    // If just started, after welcome message, show first question
-    if (step < questions.length && !messages.some(m => m.text === questions[step].text)) {
-      startTyping(questions[step].text);
+    // Only add if not already present
+    const q = questions[step]?.text;
+    if (q && !messages.some(m => m.text === q)) {
+      startTyping(q);
     }
   }, [step, typing, disqualified, messages]);
 
-  // Typing effect
-  const startTyping = (text, delay = 12) => {
+  // Typing animation
+  const startTyping = (text, delay = 14) => {
     setTyping(true);
     setTypingBuffer("");
     let index = 0;
@@ -88,22 +89,25 @@ function App() {
     }, delay);
   };
 
-  // Handle answer click
+  // ANSWER LOGIC
   const handleAnswer = async (answer) => {
     setMessages(prev => [...prev, { from: "user", text: answer }]);
     const current = questions[step];
     const points = current.weight[answer];
 
-    // Save answer to DB (optional, comment if not needed)
-    await supabase.from("responses").insert({
-      supplier_email: supplierEmail,
-      question_index: step,
-      answer,
-      score: points
-    });
+    // Try DB insert (catch error, show toast, not crash)
+    try {
+      await supabase.from("responses").insert({
+        supplier_email: supplierEmail,
+        question_index: step,
+        answer,
+        score: points
+      });
+    } catch (e) {
+      // Silently ignore in demo (could show toast)
+    }
 
     if (answer === "No" && points === 0) {
-      // Disqualify immediately
       setMessages(prev => [
         ...prev,
         { from: "bot", text: `❌ Disqualified: ${current.consequence}` }
@@ -123,7 +127,6 @@ function App() {
     ]);
 
     if (answer === "Yes" && current.requirements.length > 0) {
-      // Trigger upload for each required doc
       setUploadInputs(current.requirements);
       setUploadFiles({});
     } else {
@@ -132,18 +135,16 @@ function App() {
     }
   };
 
-  // Handle file change for each requirement
+  // UPLOAD DOCS LOGIC (force all uploads)
   const handleFileChange = (idx, file) => {
     setUploadFiles(prev => ({ ...prev, [idx]: file }));
   };
 
-  // Upload all required files for this question
   const handleFilesUploaded = async () => {
     if (uploadInputs.length !== Object.keys(uploadFiles).length) {
       alert("Please upload all required documents before submitting.");
       return;
     }
-    // Upload to supabase
     for (let i = 0; i < uploadInputs.length; i++) {
       const file = uploadFiles[i];
       if (!file) continue;
@@ -162,7 +163,7 @@ function App() {
     setStep(prev => prev + 1);
   };
 
-  // Restart if disqualified
+  // Restart on disqualify
   const restart = () => {
     setMessages([
       { from: "bot", text: "Welcome to the VendorIQ Supplier Compliance Interview." }
@@ -178,15 +179,16 @@ function App() {
     setShowRestart(false);
   };
 
-  // Render chat bubbles
+  // RENDER HELPERS
   const renderMessages = () =>
-    messages.map((msg, idx) => (
-      <div key={idx} className={`bubble ${msg.from}`}>
-        {msg.text}
-      </div>
-    ));
+    messages.map((msg, idx) =>
+      idx === messages.length - 1 && disqualified && msg.text.startsWith("❌") ? null : (
+        <div key={idx} className={`bubble ${msg.from}`}>
+          {msg.text}
+        </div>
+      )
+    );
 
-  // Render fade-in typing bubble
   const renderTyping = () =>
     typingBuffer && (
       <div className="bubble bot typing">
@@ -194,7 +196,6 @@ function App() {
       </div>
     );
 
-  // Render document uploads
   const renderUploads = () =>
     uploadInputs.length > 0 && (
       <div className="bubble bot upload">
@@ -208,7 +209,7 @@ function App() {
               type="file"
               onChange={e => handleFileChange(idx, e.target.files[0])}
               style={{ marginLeft: 8 }}
-              accept=".pdf,.doc,.docx"
+              accept=".pdf,.doc,.docx,.jpeg,.jpg,.png"
             />
           </div>
         ))}
@@ -222,7 +223,6 @@ function App() {
       </div>
     );
 
-  // Render answer buttons
   const renderButtons = () =>
     !typing &&
     !disqualified &&
@@ -234,7 +234,6 @@ function App() {
       </div>
     );
 
-  // Render restart button
   const renderRestart = () =>
     showRestart && (
       <div style={{ textAlign: "center", marginTop: 20 }}>
@@ -244,7 +243,6 @@ function App() {
       </div>
     );
 
-  // Render summary
   const renderFinalReport = () =>
     step >= questions.length && !disqualified && (
       <div className="bubble bot complete">
@@ -259,7 +257,6 @@ function App() {
       </div>
     );
 
-  // Render disqualified
   const renderDisqualified = () =>
     disqualified && (
       <div className="bubble bot disqualified">
