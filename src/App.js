@@ -1,287 +1,195 @@
 import React, { useState, useEffect, useRef } from "react";
-import { supabase } from "./supabaseClient";
-import "./App.css";
-
-const supplierId = "SUP123";
-const supplierEmail = "abc@vendor.com";
 
 const questions = [
   {
-    text: "Does your Company have a written OHS Policy that has been approved by your top management and has been communicated throughout the organization and to your subcontractors (when applicable)?",
-    weight: { Yes: 10, No: 5 },
+    text: "Do you have a written OHS Policy?",
     requirements: [
-      "A copy of the OHS Policy",
-      "Evidence of how the OHS Policy has been communicated to employees (if available subcontractors) (i.e. Email, training, notice boards)"
+      "OHS Policy Document",
+      "Evidence of communication to employees/subcontractors"
     ],
-    consequence: "Consider obtaining ISO 9001 for better market compliance."
   },
   {
-    text: "Has your Company committed any infringements to the laws or regulations concerning Occupational Health & Safety (OHS) matters in the last three (03) years or is under any current investigation by, or in discussions with, any regulatory authority in respect of any OHS matters, accident or alleged breach of OHS laws or regulations?",
-    weight: { Yes: 10, No: 0 },
+    text: "Any OHS legal infringements in the last 3 years?",
     requirements: [
-      "A declaration from your top management that your company has not committed any infringements to the laws or regulations or is not under any current investigation by any regulatory authority in respect of any OHS matters (Statement should be signed off by CEO with official letterhead, stamp, etc.)",
-      "A copy of the documented process or the systematic identification and assessment of legal applicable laws and regulations (i.e. procedure, instruction)",
-      "A list of all OHS requirements including laws and regulations that the Company has identified as applicable",
-      "A report of the legal compliance check conducted within the last twelve (12) months and corrective action plan to close any gaps identified"
+      "Management declaration",
+      "Legal assessment procedure",
+      "List of OHS legal requirements",
+      "Latest legal compliance report"
     ],
-    consequence: "Failure to comply this, Supplier will be directly failed the assessment"
   },
   {
-    text: "Does the company have a process for Incident Reporting and Investigation, including a system for recording safety incidents (near misses, injuries, fatalities etc.) that meets local regulations and Ericsson's OHS Requirements at a minimum?",
-    weight: { Yes: 10, No: 0 },
+    text: "Do you have an Incident Reporting and Investigation process?",
     requirements: [
-      "A copy of the documented process (i.e. procedure, instruction)",
-      "Evidence of how the process has been communicated to employees (if available subcontractors) (i.e. Email, training, notice boards)",
-      "Evidence of investigations, identified root causes and action plans for incidents and near misses (i.e. investigation reports) (excluding personal identifiable information)",
-      "Records if the Company had any work-related fatality and/or incidents (internal employee, sub-contractors, or external party) that caused permanent disability or absence of over thirty (30) days in the last three (03) years. Evidence requested includes; 1. If yes, the Company must provide the investigation report/s, and corrective action plans to prevent re-occurrence, including a status report on the corrective actions. 2. If not, the Company must provide a declaration from its top management that there has not been any work-related fatality and/or incident that caused permanent disability or absence of over thirty (30) days in the last three (03) years.",
-      "Last three (03) years statistics including incidents, near misses, fatalities, work related illness"
+      "Incident process document",
+      "Communication evidence",
+      "Investigation reports",
+      "Declaration or reports on work-related fatality/absence",
+      "Last 3 years incident statistics"
     ],
-    consequence: "Failure to comply this, Supplier will be directly failed the assessment"
-  }
+  },
 ];
 
-function App() {
+export default function App() {
   const [messages, setMessages] = useState([
     { from: "bot", text: "Welcome to the VendorIQ Supplier Compliance Interview." }
   ]);
   const [typing, setTyping] = useState(false);
-  const [typingBuffer, setTypingBuffer] = useState("");
+  const [typingText, setTypingText] = useState("");
   const [step, setStep] = useState(0);
-  const [score, setScore] = useState(0);
-  const [disqualified, setDisqualified] = useState(false);
-  const [uploadInputs, setUploadInputs] = useState([]);
-  const [uploadFiles, setUploadFiles] = useState({});
-  const [reportFeedback, setReportFeedback] = useState([]);
-  const [showRestart, setShowRestart] = useState(false);
-  const chatBottomRef = useRef(null);
+  const [showUploads, setShowUploads] = useState(false);
+  const typingTimeout = useRef();
 
-  // SCROLL TO BOTTOM
+  // Typing animation effect for bot questions
   useEffect(() => {
-    if (chatBottomRef.current) {
-      chatBottomRef.current.scrollIntoView({ behavior: "smooth" });
+    if (step < questions.length && !typing && !showUploads) {
+      const question = questions[step].text;
+      setTyping(true);
+      setTypingText("");
+      let i = 0;
+      typingTimeout.current = setInterval(() => {
+        setTypingText(question.slice(0, i + 1));
+        i++;
+        if (i === question.length) {
+          clearInterval(typingTimeout.current);
+          setTimeout(() => {
+            setMessages(prev => [
+              ...prev,
+              { from: "bot", text: question }
+            ]);
+            setTyping(false);
+            setTypingText("");
+          }, 400);
+        }
+      }, 18);
     }
-  }, [messages, typingBuffer, uploadInputs, disqualified]);
+    return () => clearInterval(typingTimeout.current);
+  }, [step, typing, showUploads]);
 
-  // Add question if needed (no duplicate!)
-  useEffect(() => {
-    if (typing || disqualified || step >= questions.length) return;
-    // Only add if not already present
-    const q = questions[step]?.text;
-    if (q && !messages.some(m => m.text === q)) {
-      startTyping(q);
-    }
-  }, [step, typing, disqualified, messages]);
-
-  // Typing animation
-  const startTyping = (text, delay = 14) => {
-    setTyping(true);
-    setTypingBuffer("");
-    let index = 0;
-    const interval = setInterval(() => {
-      setTypingBuffer(text.slice(0, index + 1));
-      index++;
-      if (index >= text.length) {
-        clearInterval(interval);
-        setTyping(false);
-        setMessages(prev => [...prev, { from: "bot", text }]);
-        setTypingBuffer("");
-      }
-    }, delay);
-  };
-
-  // ANSWER LOGIC
-  const handleAnswer = async (answer) => {
-    setMessages(prev => [...prev, { from: "user", text: answer }]);
-    const current = questions[step];
-    const points = current.weight[answer];
-
-    // Try DB insert (catch error, show toast, not crash)
-    try {
-      await supabase.from("responses").insert({
-        supplier_email: supplierEmail,
-        question_index: step,
-        answer,
-        score: points
-      });
-    } catch (e) {
-      // Silently ignore in demo (could show toast)
-    }
-
-    if (answer === "No" && points === 0) {
-      setMessages(prev => [
-        ...prev,
-        { from: "bot", text: `❌ Disqualified: ${current.consequence}` }
-      ]);
-      setDisqualified(true);
-      setShowRestart(true);
-      setReportFeedback(prev => [
-        ...prev,
-        `Q${step + 1}: ❌ Disqualified - ${current.consequence}`
-      ]);
-      return;
-    }
-
-    setReportFeedback(prev => [
+  const handleAnswer = answer => {
+    setMessages(prev => [
       ...prev,
-      `Q${step + 1}: ${answer} - ${answer === "Yes" ? "Good. Please upload all required documents." : current.consequence}`
+      { from: "user", text: answer }
     ]);
-
-    if (answer === "Yes" && current.requirements.length > 0) {
-      setUploadInputs(current.requirements);
-      setUploadFiles({});
+    if (answer === "Yes" && questions[step].requirements.length > 0) {
+      setShowUploads(true);
     } else {
-      setScore(prev => prev + points);
+      setShowUploads(false);
       setStep(prev => prev + 1);
     }
   };
 
-  // UPLOAD DOCS LOGIC (force all uploads)
-  const handleFileChange = (idx, file) => {
-    setUploadFiles(prev => ({ ...prev, [idx]: file }));
-  };
-
-  const handleFilesUploaded = async () => {
-    if (uploadInputs.length !== Object.keys(uploadFiles).length) {
-      alert("Please upload all required documents before submitting.");
-      return;
-    }
-    for (let i = 0; i < uploadInputs.length; i++) {
-      const file = uploadFiles[i];
-      if (!file) continue;
-      const folder = `uploads/${supplierId}_${supplierEmail}/question-${step + 1}`;
-      const path = `${folder}/${file.name}`;
-      const { error } = await supabase.storage.from("uploads").upload(path, file, { upsert: true });
-      if (error) {
-        alert("Upload failed: " + error.message);
-        return;
-      }
-    }
-    setMessages(prev => [...prev, { from: "bot", text: "✅ Files uploaded. Moving on..." }]);
-    setScore(prev => prev + questions[step].weight.Yes);
-    setUploadInputs([]);
-    setUploadFiles({});
+  const handleSubmitDocuments = () => {
+    setMessages(prev => [
+      ...prev,
+      { from: "bot", text: "Files uploaded. Moving on..." }
+    ]);
+    setShowUploads(false);
     setStep(prev => prev + 1);
   };
 
-  // Restart on disqualify
-  const restart = () => {
-    setMessages([
-      { from: "bot", text: "Welcome to the VendorIQ Supplier Compliance Interview." }
+  const handleSkipQuestion = () => {
+    setMessages(prev => [
+      ...prev,
+      { from: "user", text: "Skip" }
     ]);
-    setTyping(false);
-    setTypingBuffer("");
-    setStep(0);
-    setScore(0);
-    setDisqualified(false);
-    setUploadInputs([]);
-    setUploadFiles({});
-    setReportFeedback([]);
-    setShowRestart(false);
+    setShowUploads(false);
+    setStep(prev => prev + 1);
   };
 
-  // RENDER HELPERS
-  const renderMessages = () =>
-    messages.map((msg, idx) =>
-      idx === messages.length - 1 && disqualified && msg.text.startsWith("❌") ? null : (
-        <div key={idx} className={`bubble ${msg.from}`}>
-          {msg.text}
-        </div>
-      )
-    );
-
-  const renderTyping = () =>
-    typingBuffer && (
-      <div className="bubble bot typing">
-        {typingBuffer}
-      </div>
-    );
-
-  const renderUploads = () =>
-    uploadInputs.length > 0 && (
-      <div className="bubble bot upload">
-        <div>
-          <strong>Please upload the following documents:</strong>
-        </div>
-        {uploadInputs.map((label, idx) => (
-          <div key={idx} style={{ marginBottom: 10 }}>
-            <label>{label}</label>
-            <input
-              type="file"
-              onChange={e => handleFileChange(idx, e.target.files[0])}
-              style={{ marginLeft: 8 }}
-              accept=".pdf,.doc,.docx,.jpeg,.jpg,.png"
-            />
+  return (
+    <div style={{ maxWidth: 500, margin: "40px auto", fontFamily: "sans-serif" }}>
+      <h1>VendorIQ Chatbot</h1>
+      <div>
+        {messages.map((msg, idx) => (
+          <div
+            key={idx}
+            style={{
+              margin: "10px 0",
+              padding: "12px 20px",
+              background: msg.from === "bot" ? "#e5eeff" : "#d1ffe5",
+              borderRadius: 20,
+              textAlign: msg.from === "bot" ? "left" : "right",
+              maxWidth: "90%",
+              marginLeft: msg.from === "bot" ? 0 : "auto",
+              boxShadow: "0 1px 4px #0001"
+            }}
+          >
+            {msg.text}
           </div>
         ))}
-        <button
-          className="submit-btn"
-          onClick={handleFilesUploaded}
-          disabled={uploadInputs.length !== Object.keys(uploadFiles).length}
-        >
-          Submit Documents
-        </button>
-      </div>
-    );
 
-  const renderButtons = () =>
-    !typing &&
-    !disqualified &&
-    uploadInputs.length === 0 &&
-    step < questions.length && (
-      <div className="bubble user" style={{ background: "none", boxShadow: "none" }}>
-        <button onClick={() => handleAnswer("Yes")} className="answer-btn">Yes</button>
-        <button onClick={() => handleAnswer("No")} className="answer-btn">No</button>
-      </div>
-    );
+        {typing && (
+          <div
+            style={{
+              margin: "10px 0",
+              padding: "12px 20px",
+              background: "#e5eeff",
+              borderRadius: 20,
+              color: "#234",
+              fontStyle: "italic",
+              boxShadow: "0 1px 4px #0001"
+            }}
+          >
+            {typingText}
+            <span className="typing-cursor">|</span>
+          </div>
+        )}
 
-  const renderRestart = () =>
-    showRestart && (
-      <div style={{ textAlign: "center", marginTop: 20 }}>
-        <button className="restart-btn" onClick={restart}>
-          Restart Assessment
-        </button>
-      </div>
-    );
+        {/* Show answer buttons only when not typing, not uploading, and still in questions */}
+        {!typing && !showUploads && step < questions.length && (
+          <div style={{ marginTop: 24 }}>
+            <button onClick={() => handleAnswer("Yes")} style={{ marginRight: 16 }}>Yes</button>
+            <button onClick={() => handleAnswer("No")}>No</button>
+          </div>
+        )}
 
-  const renderFinalReport = () =>
-    step >= questions.length && !disqualified && (
-      <div className="bubble bot complete">
-        <h3>✅ Assessment Complete</h3>
-        <p>Score: {score}</p>
-        <h4>Feedback Summary:</h4>
-        <ul>
-          {reportFeedback.map((line, idx) => (
-            <li key={idx}>{line}</li>
-          ))}
-        </ul>
-      </div>
-    );
+        {/* Document upload with dashed line separators and skip button */}
+        {showUploads && (
+          <div style={{
+            background: "#fff",
+            border: "1px solid #dde5fa",
+            borderRadius: 16,
+            padding: 18,
+            margin: "16px 0",
+            boxShadow: "0 1px 6px #0001"
+          }}>
+            <h4>Upload required documents:</h4>
+            {questions[step].requirements.map((req, idx) => (
+              <div key={idx} style={{ marginBottom: 12 }}>
+                <label>{req}</label>
+                <input type="file" style={{ display: "block", marginTop: 5 }} />
+                {/* Dashed line, but not after last item */}
+                {idx < questions[step].requirements.length - 1 && (
+                  <div style={{
+                    borderBottom: "1.5px dashed #7ba5ff",
+                    margin: "16px 0"
+                  }} />
+                )}
+              </div>
+            ))}
+            <button onClick={handleSubmitDocuments} style={{ marginRight: 12 }}>Submit Documents</button>
+            <button onClick={handleSkipQuestion} style={{
+              background: "#ffe5e5", border: "1px solid #ffbaba"
+            }}>Skip Question</button>
+          </div>
+        )}
 
-  const renderDisqualified = () =>
-    disqualified && (
-      <div className="bubble bot disqualified">
-        <h3>❌ Disqualified</h3>
-        <p>{questions[step]?.consequence}</p>
-      </div>
-    );
-
-  return (
-    <div className="chat-bg">
-      <div className="chat-window">
-        <h1>VendorIQ Chatbot</h1>
-        <div className="chat-area">
-          {renderMessages()}
-          {renderTyping()}
-          {renderUploads()}
-          {renderButtons()}
-          {renderFinalReport()}
-          {renderDisqualified()}
-          {renderRestart()}
-          <div ref={chatBottomRef} />
-        </div>
+        {/* Assessment complete */}
+        {!typing && !showUploads && step === questions.length && (
+          <div
+            style={{
+              margin: "40px 0 0",
+              padding: "16px",
+              background: "#e5ffe5",
+              borderRadius: 20,
+              fontWeight: "bold",
+              textAlign: "center"
+            }}
+          >
+            Assessment Complete!
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-export default App;
