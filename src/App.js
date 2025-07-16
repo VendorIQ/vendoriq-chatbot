@@ -62,7 +62,7 @@ function App() {
 
   useEffect(() => {
     if (step >= questions.length && !disqualified) {
-      fetch(import.meta.env.VITE_FUNCTION_ENDPOINT, {
+      fetch(process.env.REACT_APP_FUNCTION_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
