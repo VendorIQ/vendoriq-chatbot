@@ -15,6 +15,7 @@ function App() {
   const [score, setScore] = useState(0);
   const [disqualified, setDisqualified] = useState(false);
   const [messageQueued, setMessageQueued] = useState(false);
+  const [reportFeedback, setReportFeedback] = useState([]);
 
   const questions = [
     {
@@ -47,6 +48,20 @@ function App() {
     }
   }, [step, typing, typingBuffer, disqualified, messageQueued]);
 
+  useEffect(() => {
+    if (step >= questions.length && !disqualified) {
+      fetch("https://nkszauzneezmdgmqykxy.functions.supabase.co/send-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: supplierEmail,
+          score,
+          feedback: reportFeedback
+        })
+      });
+    }
+  }, [step, disqualified]);
+
   const typeBotMessage = (text) => {
     setTyping(true);
     setTypingBuffer("");
@@ -68,6 +83,28 @@ function App() {
     const current = questions[step];
     setMessages(prev => [...prev, { from: "user", text: answer }]);
 
+    const saveAnswerToDB = async () => {
+      const { error } = await supabase
+        .from("responses")
+        .insert({
+          supplier_email: supplierEmail,
+          question_index: step,
+          answer: answer,
+          score: current.weight[answer],
+        });
+
+      if (error) {
+        console.error("Failed to save response:", error.message);
+      }
+    };
+    saveAnswerToDB();
+
+    const feedbackMsg = answer === "No"
+      ? `❗ ${current.consequence}`
+      : `✅ Good. Please ensure all required documents are uploaded.`;
+
+    setReportFeedback(prev => [...prev, `Q${step + 1}: ${answer} - ${feedbackMsg}`]);
+
     if (answer === "No" && current.weight["No"] === 0) {
       setMessages(prev => [...prev, { from: "bot", text: current.consequence }]);
       setDisqualified(true);
@@ -85,6 +122,7 @@ function App() {
   const handleFilesUploaded = async () => {
     const inputs = document.querySelectorAll("input[type='file']");
     const folderPrefix = `uploads/${supplierId}_${supplierEmail}/question-${step}`;
+    let uploadedFiles = 0;
 
     for (let i = 0; i < inputs.length; i++) {
       const file = inputs[i].files[0];
@@ -99,13 +137,34 @@ function App() {
         alert("Upload failed: " + error.message);
         return;
       }
+      uploadedFiles++;
     }
 
+    const uploadFeedback = uploadedFiles === 0
+      ? `⚠️ No documents uploaded for question ${step + 1}.`
+      : `📎 ${uploadedFiles} document(s) uploaded for question ${step + 1}.`;
+
+    setReportFeedback(prev => [...prev, uploadFeedback]);
     setScore(prev => prev + questions[step].weight["Yes"]);
     setUploadInputs([]);
     setMessages(prev => [...prev, { from: "bot", text: "✅ Files uploaded. Moving on..." }]);
     setStep(prev => prev + 1);
   };
+
+  const renderFinalReport = () => (
+    <div className="complete-box">
+      <h3>✅ Assessment Complete</h3>
+      <p>Score: {score}</p>
+      <div>
+        <h4>Feedback Summary:</h4>
+        <ul>
+          {reportFeedback.map((line, idx) => (
+            <li key={idx}>{line}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
 
   return (
     <div className="chat-container">
@@ -142,12 +201,7 @@ function App() {
         </div>
       )}
 
-      {step >= questions.length && !disqualified && (
-        <div className="complete-box">
-          <h3>✅ Assessment Complete</h3>
-          <p>Score: {score}</p>
-        </div>
-      )}
+      {step >= questions.length && !disqualified && renderFinalReport()}
 
       {disqualified && (
         <div className="disqualified-box">
