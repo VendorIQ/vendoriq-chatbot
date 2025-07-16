@@ -37,14 +37,15 @@ export default function App() {
   const [typingText, setTypingText] = useState("");
   const [step, setStep] = useState(0);
   const [showUploads, setShowUploads] = useState(false);
+  const [justAnswered, setJustAnswered] = useState(false);
   const typingTimeout = useRef();
 
-  // Typing animation effect for bot questions
+  // Typing animation for bot questions: runs when new step starts, not after every render
   useEffect(() => {
-    if (step < questions.length && !typing && !showUploads) {
-      const question = questions[step].text;
+    if (step < questions.length && !justAnswered && !showUploads) {
       setTyping(true);
       setTypingText("");
+      const question = questions[step].text;
       let i = 0;
       typingTimeout.current = setInterval(() => {
         setTypingText(question.slice(0, i + 1));
@@ -58,33 +59,44 @@ export default function App() {
             ]);
             setTyping(false);
             setTypingText("");
-          }, 400);
+          }, 350);
         }
       }, 18);
+      // set justAnswered back to false for future steps
+      return () => clearInterval(typingTimeout.current);
     }
-    return () => clearInterval(typingTimeout.current);
-  }, [step, typing, showUploads]);
+    // eslint-disable-next-line
+  }, [step, justAnswered, showUploads]);
 
+  // When user answers, trigger upload or next step
   const handleAnswer = answer => {
     setMessages(prev => [
       ...prev,
       { from: "user", text: answer }
     ]);
+    setJustAnswered(true);
     if (answer === "Yes" && questions[step].requirements.length > 0) {
       setShowUploads(true);
     } else {
       setShowUploads(false);
-      setStep(prev => prev + 1);
+      setTimeout(() => {
+        setStep(prev => prev + 1);
+        setJustAnswered(false);
+      }, 400);
     }
   };
 
+  // Handle uploading files
   const handleSubmitDocuments = () => {
     setMessages(prev => [
       ...prev,
       { from: "bot", text: "Files uploaded. Moving on..." }
     ]);
     setShowUploads(false);
-    setStep(prev => prev + 1);
+    setTimeout(() => {
+      setStep(prev => prev + 1);
+      setJustAnswered(false);
+    }, 400);
   };
 
   const handleSkipQuestion = () => {
@@ -93,11 +105,14 @@ export default function App() {
       { from: "user", text: "Skip" }
     ]);
     setShowUploads(false);
-    setStep(prev => prev + 1);
+    setTimeout(() => {
+      setStep(prev => prev + 1);
+      setJustAnswered(false);
+    }, 400);
   };
 
   return (
-    <div style={{ maxWidth: 500, margin: "40px auto", fontFamily: "sans-serif" }}>
+    <div style={{ maxWidth: 700, margin: "40px auto", fontFamily: "sans-serif" }}>
       <h1>VendorIQ Chatbot</h1>
       <div>
         {messages.map((msg, idx) => (
@@ -135,7 +150,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Show answer buttons only when not typing, not uploading, and still in questions */}
         {!typing && !showUploads && step < questions.length && (
           <div style={{ marginTop: 24 }}>
             <button onClick={() => handleAnswer("Yes")} style={{ marginRight: 16 }}>Yes</button>
@@ -143,7 +157,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Document upload with dashed line separators and skip button */}
+        {/* Upload section */}
         {showUploads && (
           <div style={{
             background: "#fff",
