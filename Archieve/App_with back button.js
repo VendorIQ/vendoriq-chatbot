@@ -481,7 +481,22 @@ export default function App() {
               </div>
             )}
           </div>
-          
+          <button
+            style={{
+              marginTop: 24,
+              padding: "10px 22px",
+              borderRadius: 10,
+              background: "#3b72da",
+              color: "#fff",
+              border: "none",
+              fontSize: "1rem",
+              fontWeight: 500,
+              cursor: "pointer",
+            }}
+            onClick={handleBackToReview}
+          >
+            Review My Answers
+          </button>
         </div>
       )}
     </div>

@@ -1,0 +1,282 @@
+// VendorIQ React chatbot with Supabase integration and document uploads
+import React, { useState, useEffect, useRef } from "react";
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.REACT_APP_SUPABASE_URL,
+  process.env.REACT_APP_SUPABASE_ANON_KEY
+);
+
+const questions = [
+  {
+    number: 1,
+    text: "Does your Company have a written OHS Policy that has been approved by your top management and has been communicated throughout the organization and to your subcontractors (when applicable)?",
+    disqualifiesIfNo: true,
+    requirements: [
+      "A copy of the OHS Policy.",
+      "Evidence of how the OHS Policy has been communicated to employees (if available subcontractors) (i.e. Email, training, notice boards)."
+    ],
+  },
+  {
+    number: 2,
+    text: "Has your Company committed any infringements to the laws or regulations concerning Occupational Health & Safety (OHS) matters in the last three (03) years or is under any current investigation by, or in discussions with, any regulatory authority in respect of any OHS matters, accident or alleged breach of OHS laws or regulations?",
+    disqualifiesIfNo: false,
+    requirements: [
+      "A declaration from your top management that your company has not committed any infringements to the laws or regulations or is not under any current investigation by any regulatory authority in respect of any OHS matters (Statement should be signed off by CEO with official letterhead, stamp, etc.)",
+      "A copy of the documented process or the systematic identification and assessment of legal applicable laws and regulations (i.e. procedure, instruction)",
+      "A list of all OHS requirements including laws and regulations that the Company has identified as applicable",
+      "A report of the legal compliance check conducted within the last twelve (12) months and corrective action plan to close any gaps identified"
+    ],
+  },
+  {
+    number: 3,
+    text: "Does the company have a process for Incident Reporting and Investigation, including a system for recording safety incidents (near misses, injuries, fatalities etc.) that meets local regulations and Ericsson's OHS Requirements at a minimum?",
+    disqualifiesIfNo: false,
+    requirements: [
+      "A copy of the documented process (i.e. procedure, instruction).",
+      "Evidence of how the process has been communicated to employees (if available subcontractors) (i.e. Email, training, notice boards).",
+      "Evidence of investigations, identified root causes and action plans for incidents and near misses (i.e. investigation reports) (excluding personal identifiable information).",
+      `Records if the Company had any work-related fatality and/or incidents (internal employee, sub-contractors, or external party) that caused permanent disability or absence of over thirty (30) days in the last three (03) years.
+      Evidence requested includes:
+        1. If yes, the Company must provide the investigation report/s, and corrective action plans to prevent re-occurrence, including a status report on the corrective actions.
+        2. If not, the Company must provide a declaration from its top management that there has not been any work-related fatality and/or incident that caused permanent disability or absence of over thirty (30) days in the last three (03) years.`,
+      "Last three (03) years statistics including incidents, near misses, fatalities, work related illness."
+    ],
+  },
+];
+
+export default function App() {
+  const [messages, setMessages] = useState([]);
+  const [typing, setTyping] = useState(false);
+  const [typingText, setTypingText] = useState("");
+  const [step, setStep] = useState(-1);
+  const [showUploads, setShowUploads] = useState(false);
+  const [justAnswered, setJustAnswered] = useState(false);
+  const [email, setEmail] = useState("");
+  const [sessionId, setSessionId] = useState(null);
+  const [showEmailInput, setShowEmailInput] = useState(true);
+  const [showComplete, setShowComplete] = useState(false);
+  const [uploadFiles, setUploadFiles] = useState({});
+  const [answers, setAnswers] = useState([]);
+  const [reviewConfirmed, setReviewConfirmed] = useState(false);
+  const [reviewMode, setReviewMode] = useState(false);
+  const typingTimeout = useRef();
+
+  const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  const startTypingQuestion = (stepIndex) => {
+    const question = questions[stepIndex].text;
+    setTyping(true);
+    setTypingText("");
+    let i = 0;
+    typingTimeout.current = setInterval(() => {
+      setTypingText(question.slice(0, i + 1));
+      i++;
+      if (i === question.length) {
+        clearInterval(typingTimeout.current);
+        setTimeout(() => {
+          setMessages(prev => [...prev, { from: "bot", text: question }]);
+          setTyping(false);
+          setTypingText("");
+        }, 350);
+      }
+    }, 14);
+  };
+
+  const initSession = async () => {
+    if (!validateEmail(email)) {
+      alert("Please enter a valid email address.");
+      return;
+    }
+    const { data, error } = await supabase.from("sessions").select("*").eq("email", email).single();
+    let sessionStep = 0;
+    if (data) {
+      setSessionId(data.id);
+      sessionStep = data.current_question;
+    } else {
+      const { data: newSession, error: insertError } = await supabase
+        .from("sessions")
+        .insert({ email, current_question: 0, status: "active" })
+        .select()
+        .single();
+      if (newSession) {
+        setSessionId(newSession.id);
+      } else {
+        console.error('Failed to create session:', insertError);
+        alert('Could not start session. Please try again or contact support.');
+        return;
+      }
+    }
+    setShowEmailInput(false);
+    setMessages([{ from: "bot", text: "Welcome to the VendorIQ Supplier Compliance Interview." }]);
+    setTimeout(() => setStep(sessionStep), 400);
+  };
+
+  useEffect(() => {
+    if (step >= 0 && step < questions.length && !justAnswered && !showUploads) {
+      startTypingQuestion(step);
+      return () => clearInterval(typingTimeout.current);
+    } else if (step >= questions.length && reviewConfirmed) {
+      setShowComplete(true);
+    }
+  }, [step, justAnswered, showUploads, reviewConfirmed]);
+
+  const handleAnswer = (answer) => {
+    const currentQuestion = questions[step];
+    setAnswers(prev => {
+      const updated = [...prev];
+      updated[step] = { question: currentQuestion.text, answer };
+      return updated;
+    });
+    setMessages(prev => [...prev, { from: "user", text: answer }]);
+    setJustAnswered(true);
+    if (answer === "Yes" && currentQuestion.requirements.length > 0) {
+      setShowUploads(true);
+    } else {
+      setTimeout(() => {
+        setStep(prev => prev + 1);
+        setJustAnswered(false);
+      }, 400);
+    }
+  };
+
+  const handleUploadChange = async (e, requirementIndex) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const filePath = `uploads/${sessionId}_${email}/question-${questions[step].number}/req-${requirementIndex + 1}-${file.name}`;
+    await supabase.storage.from('uploaded_files').upload(filePath, file, { upsert: true });
+    setUploadFiles(prev => ({ ...prev, [requirementIndex]: file }));
+  };
+
+  const handleEditAnswer = (index) => {
+    setStep(index);
+    setShowUploads(false);
+    setJustAnswered(false);
+    setReviewConfirmed(false);
+    setReviewMode(false);
+    setMessages(prev => [...prev, { from: "bot", text: `Let's revisit Question ${index + 1}` }]);
+  };
+
+  return (
+    <div style={{ maxWidth: 700, margin: "40px auto", fontFamily: "sans-serif" }}>
+      <nav style={{ background: "#333", color: "#fff", padding: "12px 24px", borderRadius: 10, marginBottom: 20 }}>
+        <strong>VendorIQ Chatbot</strong>
+      </nav>
+
+      {showEmailInput && (
+        <div style={{ marginBottom: 20 }}>
+          <input
+            type="email"
+            placeholder="Enter your email to begin"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && initSession()}
+            style={{ padding: "10px", width: "80%", fontSize: "1rem" }}
+          />
+          <button onClick={initSession} style={{ marginLeft: 10, padding: "10px" }}>Start</button>
+        </div>
+      )}
+
+      {messages.map((msg, idx) => (
+        <div
+          key={idx}
+          style={{
+            margin: "10px 0",
+            padding: "12px 20px",
+            background: msg.from === "bot" ? "#e5eeff" : "#d1ffe5",
+            borderRadius: 20,
+            textAlign: msg.from === "bot" ? "left" : "right",
+            maxWidth: "95%",
+            marginLeft: msg.from === "bot" ? 0 : "auto",
+            boxShadow: "0 1px 4px #0001",
+            fontSize: "1.05rem"
+          }}
+        >
+          {msg.text}
+        </div>
+      ))}
+
+      {typing && (
+        <div
+          style={{
+            margin: "10px 0",
+            padding: "12px 20px",
+            background: "#e5eeff",
+            borderRadius: 20,
+            color: "#234",
+            fontStyle: "italic",
+            boxShadow: "0 1px 4px #0001"
+          }}
+        >
+          {typingText}<span className="typing-cursor">|</span>
+        </div>
+      )}
+
+      {!typing && !showUploads && !showEmailInput && step >= 0 && step < questions.length && (
+        <div style={{ marginTop: 24 }}>
+          <button onClick={() => handleAnswer("Yes")} style={{ marginRight: 16 }}>Yes</button>
+          <button onClick={() => handleAnswer("No")}>No</button>
+        </div>
+      )}
+
+      {showUploads && step < questions.length && (
+        <div style={{ background: "#fffbe6", borderRadius: 16, padding: 20, marginTop: 20 }}>
+          <h3>Please upload the following documents:</h3>
+          <ul style={{ paddingLeft: 20 }}>
+            {questions[step].requirements.map((req, idx) => (
+              <li key={idx} style={{ marginBottom: 12 }}>
+                {req}
+                <br />
+                <input
+                  type="file"
+                  onChange={(e) => handleUploadChange(e, idx)}
+                  style={{ marginTop: 6 }}
+                />
+                {uploadFiles[idx] && (
+                  <div style={{ fontSize: "0.9rem", color: "#333", marginTop: 6 }}>
+                    📎 <a href={`https://your-supabase-url.supabase.co/storage/v1/object/public/uploaded_files/uploads/${sessionId}_${email}/question-${questions[step].number}/req-${idx + 1}-${uploadFiles[idx].name}`} target="_blank" rel="noopener noreferrer">{uploadFiles[idx].name}</a>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+          <button
+            onClick={() => {
+              setShowUploads(false);
+              setStep(prev => prev + 1);
+              setJustAnswered(false);
+            }}
+            style={{ marginTop: 20 }}
+          >
+            Continue
+          </button>
+        </div>
+      )}
+
+      {!showEmailInput && answers.length > 0 && step === questions.length && !showUploads && !showComplete && (
+        <div style={{ marginTop: 20, background: "#e5eeff", borderRadius: 20, padding: 20 }}>
+          <h3>Review Your Answers</h3>
+          <ul>
+            {answers.map((entry, idx) => (
+              <li key={idx} style={{ marginBottom: 10 }}>
+                <strong>Q{idx + 1}:</strong> {entry.question}
+                <br />
+                <strong>Answer:</strong> {entry.answer}
+                <br />
+                <button onClick={() => handleEditAnswer(idx)} style={{ marginTop: 4 }}>Edit</button>
+              </li>
+            ))}
+          </ul>
+          <button onClick={() => setReviewConfirmed(true)} style={{ marginTop: 12 }}>Submit Assessment</button>
+        </div>
+      )}
+
+      {showComplete && (
+        <div style={{ marginTop: 40, padding: 20, background: "#e0ffe0", borderRadius: 16 }}>
+          <h2>Assessment Complete!</h2>
+          <p>Thank you for completing the VendorIQ compliance interview. A summary report will be sent to your email shortly.</p>
+        </div>
+      )}
+    </div>
+  );
+}
