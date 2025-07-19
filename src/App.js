@@ -128,7 +128,7 @@ export default function App() {
     setTimeout(() => setStep(sessionStep), 350);
   };
 
-  // ===== Question sequence/typing =====
+  // ===== Question sequence/typing ====
   useEffect(() => {
     if (step >= 0 && step < questions.length && !justAnswered && !showUploads) {
       setUploadFiles({});
