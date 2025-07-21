@@ -9,11 +9,9 @@ const supabase = createClient(
 
 const GEMINI_API_URL = process.env.REACT_APP_GEMINI_API_URL || "https://4d66d45e-0288-4203-935e-1c5d2a182bde-00-38ratc2twzear.pike.replit.dev/api/run-gemini-feedback";
 
-// AVATAR IMAGE PATHS
 const botAvatar = process.env.PUBLIC_URL + "/bot-avatar.png";
 const userAvatar = process.env.PUBLIC_URL + "/user-avatar.png";
 
-// ---- QUESTIONNAIRE ----
 const questions = [
   {
     number: 1,
@@ -52,9 +50,10 @@ const questions = [
   }
 ];
 
-// =============== MAIN COMPONENT ===============
 export default function App() {
   const [messages, setMessages] = useState([]);
+  const [typing, setTyping] = useState(false);
+  const [typingText, setTypingText] = useState("");
   const [step, setStep] = useState(-1);
   const [showUploads, setShowUploads] = useState(false);
   const [justAnswered, setJustAnswered] = useState(false);
@@ -77,7 +76,7 @@ export default function App() {
   const [geminiLoading, setGeminiLoading] = useState(false);
   const [geminiError, setGeminiError] = useState('');
 
-  // ===== Helper for friendlier dialog =====
+  // -------- Helper for friendlier dialog --------
   function getBotMessage({ step, answer, justAnswered }) {
     if (step < 0) {
       return [
@@ -110,25 +109,40 @@ export default function App() {
     ];
   }
 
-  // ===== Utility: Sequential bubbles with delay =====
+  // -------- Utility: Sequential bubbles with typing animation --------
   function sendBubblesSequentially(messagesArray, from = "bot", delay = 650, callback) {
     let idx = 0;
     function sendNext() {
-      setMessages(prev => [...prev, { from, text: messagesArray[idx] }]);
-      idx++;
-      if (idx < messagesArray.length) {
-        setTimeout(sendNext, delay);
-      } else if (callback) {
-        setTimeout(callback, delay);
-      }
+      setTyping(true);
+      setTypingText("");
+      let i = 0;
+      const msg = messagesArray[idx];
+      const interval = setInterval(() => {
+        setTypingText(msg.slice(0, i + 1));
+        i++;
+        if (i >= msg.length) {
+          clearInterval(interval);
+          setTimeout(() => {
+            setMessages(prev => [...prev, { from, text: msg }]);
+            setTyping(false);
+            setTypingText("");
+            idx++;
+            if (idx < messagesArray.length) {
+              setTimeout(sendNext, delay);
+            } else if (callback) {
+              setTimeout(callback, delay);
+            }
+          }, 350);
+        }
+      }, 12);
     }
     sendNext();
   }
 
-  // ===== Email validation =====
+  // -------- Email validation --------
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-  // ===== Session =====
+  // -------- Session --------
   const initSession = async () => {
     if (!validateEmail(email)) {
       alert("Please enter a valid email address.");
@@ -153,11 +167,12 @@ export default function App() {
       }
     }
     setShowEmailInput(false);
-    sendBubblesSequentially(getBotMessage({ step: -1 }));
-    setTimeout(() => setStep(sessionStep), 650 * getBotMessage({ step: -1 }).length + 200);
+    sendBubblesSequentially(getBotMessage({ step: -1 }), "bot", 650, () => {
+      setStep(sessionStep);
+    });
   };
 
-  // ===== Question sequence/typing ====
+  // -------- Question sequence/typing --------
   useEffect(() => {
     if (step >= 0 && step < questions.length && !justAnswered && !showUploads) {
       setUploadFiles({});
@@ -170,7 +185,7 @@ export default function App() {
     // eslint-disable-next-line
   }, [step, justAnswered, showUploads, reviewConfirmed]);
 
-  // ===== Handle answer =====
+  // -------- Handle answer --------
   const handleAnswer = (answer) => {
     const currentQuestion = questions[step];
     setAnswers(prev => {
@@ -192,8 +207,6 @@ export default function App() {
     });
     setJustAnswered(true);
   };
-
-  // ... rest of your file upload/comment/review logic remains unchanged ...
 
   // ============ UI =============
   return (
@@ -246,52 +259,4 @@ export default function App() {
               borderRadius: "50%",
               background: "#fff",
               margin: msg.from === "bot" ? "0 16px 0 0" : "0 0 0 16px",
-              boxShadow: "0 1px 8px #0002",
-              alignSelf: "center"
-            }}
-          />
-
-          {/* Chat Bubble */}
-          <div
-            style={{
-              background: msg.from === "bot" ? "#0085CA" : "#6D7B8D",
-              color: "#fff",
-              borderRadius: "18px",
-              padding: "18px 28px",
-              minWidth: 48,
-              maxWidth: "70%",
-              fontSize: "1.13rem",
-              fontFamily: "Inter, sans-serif",
-              boxShadow: "0 1px 6px #0001",
-              position: "relative",
-              textAlign: "left",
-              wordBreak: "break-word",
-            }}
-          >
-            <ReactMarkdown>{msg.text}</ReactMarkdown>
-            {/* Bubble tail */}
-            <div
-              style={{
-                position: "absolute",
-                top: 28,
-                [msg.from === "bot" ? "left" : "right"]: "-20px",
-                width: 0,
-                height: 0,
-                borderTop: "12px solid transparent",
-                borderBottom: "12px solid transparent",
-                borderRight: msg.from === "bot"
-                  ? "20px solid #0085CA"
-                  : "none",
-                borderLeft: msg.from === "bot"
-                  ? "none"
-                  : "20px solid #6D7B8D"
-              }}
-            />
-          </div>
-        </div>
-      ))}
-
-      {/* ... rest of your upload/review/complete UI as before ... */}
-    </div>
-  );
-}
+              boxShad
