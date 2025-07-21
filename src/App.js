@@ -13,7 +13,7 @@ const GEMINI_API_URL = process.env.REACT_APP_GEMINI_API_URL || "https://4d66d45e
 const botAvatar = process.env.PUBLIC_URL + "/bot-avatar.png";
 const userAvatar = process.env.PUBLIC_URL + "/user-avatar.png";
 
-/// ---- QUESTIONNAIRE ----
+// ---- QUESTIONNAIRE ----
 const questions = [
   {
     number: 1,
@@ -50,15 +50,11 @@ const questions = [
       "Last three (03) years statistics including incidents, near misses, fatalities, work related illness."
     ]
   }
- ];
-
+];
 
 // =============== MAIN COMPONENT ===============
 export default function App() {
-  // ... your state and hooks, unchanged ...
   const [messages, setMessages] = useState([]);
-  const [typing, setTyping] = useState(false);
-  const [typingText, setTypingText] = useState("");
   const [step, setStep] = useState(-1);
   const [showUploads, setShowUploads] = useState(false);
   const [justAnswered, setJustAnswered] = useState(false);
@@ -69,7 +65,6 @@ export default function App() {
   const [uploadFiles, setUploadFiles] = useState({});
   const [answers, setAnswers] = useState([]);
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
-  const typingTimeout = useRef();
 
   // For comments per requirement:
   const [commentInputs, setCommentInputs] = useState({});
@@ -85,46 +80,53 @@ export default function App() {
   // ===== Helper for friendlier dialog =====
   function getBotMessage({ step, answer, justAnswered }) {
     if (step < 0) {
-      return "Hi there! Welcome to the VendorIQ Supplier Compliance Interview.";
+      return [
+        "Hi there! Welcome to the VendorIQ Supplier Compliance Interview.",
+        "I’ll be your guide today—just answer a few questions, and I’ll help you every step of the way."
+      ];
     }
     const q = questions[step];
     if (!justAnswered) {
       return [
-	    "I’ll be your guide today—just answer a few questions, and I’ll help you every step of the way.",
-		'Let's talk about your company's safety practices.\n\n**Question ${q.number}:** ${q.text}`;
-		];
+        "Let's talk about your company's safety practices.",
+        `**Question ${q.number}:** ${q.text}`
+      ];
     }
     if (answer === "Yes") {
-      return `Awesome, thanks for letting me know! Since you answered yes, could you please upload the required documents? (You can drag and drop your files or click to upload.)`;
+      return [
+        "Awesome, thanks for letting me know!",
+        "Since you answered yes, could you please upload the required documents? (You can drag and drop your files or click to upload.)"
+      ];
     }
     if (answer === "No" && q.disqualifiesIfNo) {
-      return `Thanks for your honesty! Just so you know, having a written OHS Policy is an important requirement. Let's continue.`;
+      return [
+        "Thanks for your honesty!",
+        "Just so you know, having a written OHS Policy is an important requirement. Let's continue."
+      ];
     }
-    return `Thanks for your response! Let's move on to the next question.`;
+    return [
+      "Thanks for your response!",
+      "Let's move on to the next question."
+    ];
+  }
+
+  // ===== Utility: Sequential bubbles with delay =====
+  function sendBubblesSequentially(messagesArray, from = "bot", delay = 650, callback) {
+    let idx = 0;
+    function sendNext() {
+      setMessages(prev => [...prev, { from, text: messagesArray[idx] }]);
+      idx++;
+      if (idx < messagesArray.length) {
+        setTimeout(sendNext, delay);
+      } else if (callback) {
+        setTimeout(callback, delay);
+      }
+    }
+    sendNext();
   }
 
   // ===== Email validation =====
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-  // ===== Animated question typing =====
-  const startTypingQuestion = (stepIndex) => {
-    const message = getBotMessage({ step: stepIndex, justAnswered: false });
-    setTyping(true);
-    setTypingText("");
-    let i = 0;
-    typingTimeout.current = setInterval(() => {
-      setTypingText(message.slice(0, i + 1));
-      i++;
-      if (i === message.length) {
-        clearInterval(typingTimeout.current);
-        setTimeout(() => {
-          setMessages(prev => [...prev, { from: "bot", text: message }]);
-          setTyping(false);
-          setTypingText("");
-        }, 350);
-      }
-    }, 10);
-  };
 
   // ===== Session =====
   const initSession = async () => {
@@ -151,8 +153,8 @@ export default function App() {
       }
     }
     setShowEmailInput(false);
-    setMessages([{ from: "bot", text: "Hi there! Welcome to the VendorIQ Supplier Compliance Interview. I’ll be your guide today—just answer a few questions, and I’ll help you every step of the way." }]);
-    setTimeout(() => setStep(sessionStep), 350);
+    sendBubblesSequentially(getBotMessage({ step: -1 }));
+    setTimeout(() => setStep(sessionStep), 650 * getBotMessage({ step: -1 }).length + 200);
   };
 
   // ===== Question sequence/typing ====
@@ -161,8 +163,7 @@ export default function App() {
       setUploadFiles({});
       setCommentInputs({});
       setUploadedComments({});
-      startTypingQuestion(step);
-      return () => clearInterval(typingTimeout.current);
+      sendBubblesSequentially(getBotMessage({ step, justAnswered: false }));
     } else if (step >= questions.length && reviewConfirmed) {
       setShowComplete(true);
     }
@@ -178,18 +179,17 @@ export default function App() {
       return updated;
     });
     setMessages(prev => [...prev, { from: "user", text: answer }]);
-    const botMsg = getBotMessage({ step, answer, justAnswered: true });
-    setTimeout(() => {
-      setMessages(prev => [...prev, { from: "bot", text: botMsg }]);
+    const botMsgs = getBotMessage({ step, answer, justAnswered: true });
+    sendBubblesSequentially(botMsgs, "bot", 650, () => {
       if (answer === "Yes" && currentQuestion.requirements.length > 0) {
         setShowUploads(true);
       } else {
         setTimeout(() => {
           setStep(prev => prev + 1);
           setJustAnswered(false);
-        }, 800);
+        }, 350);
       }
-    }, 400);
+    });
     setJustAnswered(true);
   };
 
@@ -231,9 +231,9 @@ export default function App() {
           style={{
             display: "flex",
             flexDirection: msg.from === "bot" ? "row" : "row-reverse",
-            alignItems: "flex-end",
-            margin: "18px 0",
-            maxWidth: "98%"
+            alignItems: "center",
+            margin: "32px 0",
+            maxWidth: "100%"
           }}
         >
           {/* Avatar */}
@@ -241,12 +241,13 @@ export default function App() {
             src={msg.from === "bot" ? botAvatar : userAvatar}
             alt={msg.from === "bot" ? "AI Bot" : "You"}
             style={{
-              width: 56,
-              height: 56,
+              width: 48,
+              height: 48,
               borderRadius: "50%",
               background: "#fff",
               margin: msg.from === "bot" ? "0 16px 0 0" : "0 0 0 16px",
-              boxShadow: "0 1px 8px #0002"
+              boxShadow: "0 1px 8px #0002",
+              alignSelf: "center"
             }}
           />
 
@@ -258,7 +259,7 @@ export default function App() {
               borderRadius: "18px",
               padding: "18px 28px",
               minWidth: 48,
-              maxWidth: "76%",
+              maxWidth: "70%",
               fontSize: "1.13rem",
               fontFamily: "Inter, sans-serif",
               boxShadow: "0 1px 6px #0001",
@@ -267,8 +268,7 @@ export default function App() {
               wordBreak: "break-word",
             }}
           >
-            {msg.text}
-
+            <ReactMarkdown>{msg.text}</ReactMarkdown>
             {/* Bubble tail */}
             <div
               style={{
@@ -290,40 +290,6 @@ export default function App() {
           </div>
         </div>
       ))}
-
-      {/* TYPING ANIMATION WITH AVATAR */}
-      {typing && (
-        <div style={{ display: "flex", alignItems: "flex-end", margin: "18px 0" }}>
-          <img src={botAvatar} alt="AI Bot" style={{ width: 56, height: 56, borderRadius: "50%", marginRight: 16, background: "#fff", boxShadow: "0 1px 8px #0002" }} />
-          <div
-            style={{
-              background: "#0085CA",
-              color: "#fff",
-              borderRadius: 18,
-              padding: "18px 28px",
-              fontStyle: "italic",
-              boxShadow: "0 1px 6px #0001",
-              fontSize: "1.13rem",
-              fontFamily: "Inter, sans-serif",
-              position: "relative"
-            }}
-          >
-            {typingText}<span className="typing-cursor">|</span>
-            <div
-              style={{
-                position: "absolute",
-                top: 28,
-                left: "-20px",
-                width: 0,
-                height: 0,
-                borderTop: "12px solid transparent",
-                borderBottom: "12px solid transparent",
-                borderRight: "20px solid #0085CA"
-              }}
-            />
-          </div>
-        </div>
-      )}
 
       {/* ... rest of your upload/review/complete UI as before ... */}
     </div>
