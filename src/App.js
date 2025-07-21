@@ -76,6 +76,17 @@ export default function App() {
   const [geminiLoading, setGeminiLoading] = useState(false);
   const [geminiError, setGeminiError] = useState('');
 
+ // <--- PLACE THE FUNCTION HERE, after your hooks! --->
+  function downloadSummaryFile() {
+    if (!geminiSummary) return;
+    const blob = new Blob([geminiSummary], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = "VendorIQ_AI_Summary.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
   // ===== Email validation =====
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -465,16 +476,31 @@ export default function App() {
             {geminiLoading && <div style={{ color: "#444", fontSize: "0.97rem" }}>Gemini AI is reviewing your documents…</div>}
             {geminiError && <div style={{ color: "red", fontSize: "0.97rem" }}>{geminiError}</div>}
             {geminiSummary && (
-              <div style={{ background: "#fff", padding: 12, borderRadius: 10, boxShadow: "0 1px 6px #0002", marginTop: 6 }}>
-                <h3 style={{ fontSize: "1.03rem" }}>AI Assessment Feedback</h3>
-                <ReactMarkdown>{geminiSummary}</ReactMarkdown>
-                {geminiScore !== null && (
-                  <div style={{ fontSize: "0.99rem" }}>
-                    <strong>Score:</strong> {geminiScore}%
-                  </div>
-                )}
-              </div>
-            )}
+  <div style={{ background: "#fff", padding: 12, borderRadius: 10, boxShadow: "0 1px 6px #0002", marginTop: 6 }}>
+    <h3 style={{ fontSize: "1.03rem" }}>AI Assessment Feedback</h3>
+    <ReactMarkdown>{geminiSummary}</ReactMarkdown>
+    {geminiScore !== null && (
+      <div style={{ fontSize: "0.99rem" }}>
+        <strong>Score:</strong> {geminiScore}%
+      </div>
+    )}
+    <button 
+      onClick={downloadSummaryFile} 
+      style={{
+        marginTop: 16, 
+        padding: "8px 18px", 
+        background: "#3477eb", 
+        color: "#fff", 
+        border: "none", 
+        borderRadius: 8, 
+        fontSize: "0.97rem", 
+        cursor: "pointer"
+      }}>
+      Download Gemini Summary
+    </button>
+  </div>
+)}
+
             {!geminiLoading && !geminiSummary && !geminiError && (
               <div style={{ color: "#aaa", fontSize: "0.96rem" }}>
                 No Gemini feedback yet. It may take a moment—try refreshing.
