@@ -85,11 +85,14 @@ export default function App() {
   // ===== Helper for friendlier dialog =====
   function getBotMessage({ step, answer, justAnswered }) {
     if (step < 0) {
-      return "Hi there! Welcome to the VendorIQ Supplier Compliance Interview. I’ll be your guide today—just answer a few questions, and I’ll help you every step of the way.";
+      return "Hi there! Welcome to the VendorIQ Supplier Compliance Interview.";
     }
     const q = questions[step];
     if (!justAnswered) {
-      return `Let's talk about your company's safety practices.\n\n**Question ${q.number}:** ${q.text}`;
+      return [
+	    "I’ll be your guide today—just answer a few questions, and I’ll help you every step of the way."
+		'Let's talk about your company's safety practices.\n\n**Question ${q.number}:** ${q.text}`;
+		];
     }
     if (answer === "Yes") {
       return `Awesome, thanks for letting me know! Since you answered yes, could you please upload the required documents? (You can drag and drop your files or click to upload.)`;
