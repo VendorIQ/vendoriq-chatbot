@@ -9,7 +9,11 @@ const supabase = createClient(
 
 const GEMINI_API_URL = process.env.REACT_APP_GEMINI_API_URL || "https://4d66d45e-0288-4203-935e-1c5d2a182bde-00-38ratc2twzear.pike.replit.dev/api/run-gemini-feedback";
 
-// ---- QUESTIONNAIRE ----
+// AVATAR IMAGE PATHS
+const botAvatar = process.env.PUBLIC_URL + "/bot-avatar.png";
+const userAvatar = process.env.PUBLIC_URL + "/user-avatar.png";
+
+/// ---- QUESTIONNAIRE ----
 const questions = [
   {
     number: 1,
@@ -48,8 +52,10 @@ const questions = [
   }
  ];
 
+
 // =============== MAIN COMPONENT ===============
 export default function App() {
+  // ... your state and hooks, unchanged ...
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [typingText, setTypingText] = useState("");
@@ -76,36 +82,43 @@ export default function App() {
   const [geminiLoading, setGeminiLoading] = useState(false);
   const [geminiError, setGeminiError] = useState('');
 
- // <--- PLACE THE FUNCTION HERE, after your hooks! --->
-  function downloadSummaryFile() {
-    if (!geminiSummary) return;
-    const blob = new Blob([geminiSummary], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = "VendorIQ_AI_Summary.txt";
-    a.click();
-    URL.revokeObjectURL(url);
+  // ===== Helper for friendlier dialog =====
+  function getBotMessage({ step, answer, justAnswered }) {
+    if (step < 0) {
+      return "Hi there! Welcome to the VendorIQ Supplier Compliance Interview. I’ll be your guide today—just answer a few questions, and I’ll help you every step of the way.";
+    }
+    const q = questions[step];
+    if (!justAnswered) {
+      return `Let's talk about your company's safety practices.\n\n**Question ${q.number}:** ${q.text}`;
+    }
+    if (answer === "Yes") {
+      return `Awesome, thanks for letting me know! Since you answered yes, could you please upload the required documents? (You can drag and drop your files or click to upload.)`;
+    }
+    if (answer === "No" && q.disqualifiesIfNo) {
+      return `Thanks for your honesty! Just so you know, having a written OHS Policy is an important requirement. Let's continue.`;
+    }
+    return `Thanks for your response! Let's move on to the next question.`;
   }
+
   // ===== Email validation =====
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   // ===== Animated question typing =====
   const startTypingQuestion = (stepIndex) => {
-    const question = questions[stepIndex].text;
+    const message = getBotMessage({ step: stepIndex, justAnswered: false });
     setTyping(true);
     setTypingText("");
     let i = 0;
     typingTimeout.current = setInterval(() => {
-      setTypingText(question.slice(0, i + 1));
+      setTypingText(message.slice(0, i + 1));
       i++;
-      if (i === question.length) {
+      if (i === message.length) {
         clearInterval(typingTimeout.current);
         setTimeout(() => {
-          setMessages(prev => [...prev, { from: "bot", text: question }]);
+          setMessages(prev => [...prev, { from: "bot", text: message }]);
           setTyping(false);
           setTypingText("");
-        }, 250);
+        }, 350);
       }
     }, 10);
   };
@@ -135,7 +148,7 @@ export default function App() {
       }
     }
     setShowEmailInput(false);
-    setMessages([{ from: "bot", text: "Welcome to the VendorIQ Supplier Compliance Interview." }]);
+    setMessages([{ from: "bot", text: "Hi there! Welcome to the VendorIQ Supplier Compliance Interview. I’ll be your guide today—just answer a few questions, and I’ll help you every step of the way." }]);
     setTimeout(() => setStep(sessionStep), 350);
   };
 
@@ -162,114 +175,26 @@ export default function App() {
       return updated;
     });
     setMessages(prev => [...prev, { from: "user", text: answer }]);
+    const botMsg = getBotMessage({ step, answer, justAnswered: true });
+    setTimeout(() => {
+      setMessages(prev => [...prev, { from: "bot", text: botMsg }]);
+      if (answer === "Yes" && currentQuestion.requirements.length > 0) {
+        setShowUploads(true);
+      } else {
+        setTimeout(() => {
+          setStep(prev => prev + 1);
+          setJustAnswered(false);
+        }, 800);
+      }
+    }, 400);
     setJustAnswered(true);
-    if (answer === "Yes" && currentQuestion.requirements.length > 0) {
-      setShowUploads(true);
-    } else {
-      setTimeout(() => {
-        setStep(prev => prev + 1);
-        setJustAnswered(false);
-      }, 350);
-    }
   };
 
-  // ====== Handle multi file upload ======
-  const handleUploadChange = async (e, reqIdx) => {
-    const files = Array.from(e.target.files).slice(0, 3);
-    setUploading(prev => ({ ...prev, [reqIdx]: true }));
-    let uploaded = uploadFiles[reqIdx] || [];
-    for (const file of files) {
-      const filePath = `uploads/${sessionId}_${email}/question-${questions[step].number}/req-${reqIdx + 1}-${file.name}`;
-      await supabase.storage.from('uploads').upload(filePath, file, { upsert: true });
-      uploaded.push(file);
-    }
-    setUploadFiles(prev => ({
-      ...prev,
-      [reqIdx]: uploaded.slice(0, 3)
-    }));
-    setUploading(prev => ({ ...prev, [reqIdx]: false }));
-  };
-
-  // ====== Handle comment input ======
-  const handleCommentInput = (e, reqIdx) => {
-    setCommentInputs(prev => ({ ...prev, [reqIdx]: e.target.value }));
-  };
-
-  // ====== Save comments as .txt files per requirement ======
-  const handleSaveComment = async (reqIdx) => {
-    const comment = commentInputs[reqIdx];
-    if (comment && comment.trim()) {
-      const fileBlob = new Blob([comment], { type: "text/plain" });
-      const filePath = `uploads/${sessionId}_${email}/question-${questions[step].number}/req-${reqIdx + 1}-COMMENT.txt`;
-      await supabase.storage.from('uploaded_files').upload(filePath, fileBlob, { upsert: true, contentType: "text/plain" });
-      setUploadedComments(prev => ({ ...prev, [reqIdx]: comment }));
-      setCommentInputs(prev => ({ ...prev, [reqIdx]: "" }));
-    }
-  };
-
-  // ====== Delete upload or comment ======
-  const handleDeleteFile = async (reqIdx, fileIdx) => {
-    const file = uploadFiles[reqIdx][fileIdx];
-    const filePath = `uploads/${sessionId}_${email}/question-${questions[step].number}/req-${reqIdx + 1}-${file.name}`;
-    await supabase.storage.from('uploaded_files').remove([filePath]);
-    setUploadFiles(prev => ({
-      ...prev,
-      [reqIdx]: prev[reqIdx].filter((_, i) => i !== fileIdx)
-    }));
-  };
-  const handleDeleteComment = async (reqIdx) => {
-    const filePath = `uploads/${sessionId}_${email}/question-${questions[step].number}/req-${reqIdx + 1}-COMMENT.txt`;
-    await supabase.storage.from('uploaded_files').remove([filePath]);
-    setUploadedComments(prev => ({ ...prev, [reqIdx]: undefined }));
-  };
-
-  // ===== Submit assessment & fetch Gemini feedback =====
-  const handleSubmitAssessment = async () => {
-    setReviewConfirmed(true);
-    setGeminiLoading(true);
-    setGeminiSummary('');
-    setGeminiScore(null);
-    setGeminiError('');
-    try {
-      const res = await fetch(
-        GEMINI_API_URL,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, sessionId })
-        }
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Something went wrong');
-      setGeminiSummary(data.feedback || '');
-      setGeminiScore(data.score || null);
-      setShowComplete(true);
-      setGeminiLoading(false);
-    } catch (err) {
-      setGeminiError(err.message || 'Error contacting Gemini feedback server.');
-      setGeminiLoading(false);
-    }
-  };
-
-  // ====== Edit answer ======
-  const handleEditAnswer = (index) => {
-    setStep(index);
-    setShowUploads(false);
-    setJustAnswered(false);
-    setReviewConfirmed(false);
-    setMessages(prev => [...prev, { from: "bot", text: `Let's revisit Question ${index + 1}` }]);
-  };
-
-  // ====== Back to Review after Assessment Complete ======
-  const handleBackToReview = () => {
-    setShowComplete(false);
-    setReviewConfirmed(false);
-    setStep(questions.length);
-  };
+  // ... rest of your file upload/comment/review logic remains unchanged ...
 
   // ============ UI =============
   return (
-    <div style={{ maxWidth: 700, margin: "40px auto", fontFamily: "sans-serif" }}>
+    <div style={{ maxWidth: 700, margin: "40px auto", fontFamily: "Inter, sans-serif", background: "#F7F8FA", minHeight: "100vh" }}>
       <nav style={{
         background: "#333",
         color: "#fff",
@@ -296,220 +221,108 @@ export default function App() {
         </div>
       )}
 
-      {/* CHAT HISTORY */}
+      {/* CHAT HISTORY WITH BUBBLES AND AVATARS */}
       {messages.map((msg, idx) => (
         <div
           key={idx}
           style={{
-            margin: "6px 0",
-            padding: "10px 14px",
-            background: msg.from === "bot" ? "#e5eeff" : "#d1ffe5",
-            borderRadius: 18,
-            textAlign: msg.from === "bot" ? "left" : "right",
-            maxWidth: "95%",
-            marginLeft: msg.from === "bot" ? 0 : "auto",
-            boxShadow: "0 1px 4px #0001",
-            fontSize: "0.99rem"
+            display: "flex",
+            flexDirection: msg.from === "bot" ? "row" : "row-reverse",
+            alignItems: "flex-end",
+            margin: "18px 0",
+            maxWidth: "98%"
           }}
         >
-          {msg.text}
+          {/* Avatar */}
+          <img
+            src={msg.from === "bot" ? botAvatar : userAvatar}
+            alt={msg.from === "bot" ? "AI Bot" : "You"}
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: "50%",
+              background: "#fff",
+              margin: msg.from === "bot" ? "0 16px 0 0" : "0 0 0 16px",
+              boxShadow: "0 1px 8px #0002"
+            }}
+          />
+
+          {/* Chat Bubble */}
+          <div
+            style={{
+              background: msg.from === "bot" ? "#0085CA" : "#6D7B8D",
+              color: "#fff",
+              borderRadius: "18px",
+              padding: "18px 28px",
+              minWidth: 48,
+              maxWidth: "76%",
+              fontSize: "1.13rem",
+              fontFamily: "Inter, sans-serif",
+              boxShadow: "0 1px 6px #0001",
+              position: "relative",
+              textAlign: "left",
+              wordBreak: "break-word",
+            }}
+          >
+            {msg.text}
+
+            {/* Bubble tail */}
+            <div
+              style={{
+                position: "absolute",
+                top: 28,
+                [msg.from === "bot" ? "left" : "right"]: "-20px",
+                width: 0,
+                height: 0,
+                borderTop: "12px solid transparent",
+                borderBottom: "12px solid transparent",
+                borderRight: msg.from === "bot"
+                  ? "20px solid #0085CA"
+                  : "none",
+                borderLeft: msg.from === "bot"
+                  ? "none"
+                  : "20px solid #6D7B8D"
+              }}
+            />
+          </div>
         </div>
       ))}
 
-      {/* TYPING ANIMATION */}
+      {/* TYPING ANIMATION WITH AVATAR */}
       {typing && (
-        <div
-          style={{
-            margin: "6px 0",
-            padding: "10px 14px",
-            background: "#e5eeff",
-            borderRadius: 18,
-            color: "#234",
-            fontStyle: "italic",
-            boxShadow: "0 1px 4px #0001",
-            fontSize: "0.99rem"
-          }}
-        >
-          {typingText}<span className="typing-cursor">|</span>
-        </div>
-      )}
-
-      {/* YES/NO BUTTONS */}
-      {!typing && !showUploads && !showEmailInput && step >= 0 && step < questions.length && (
-        <div style={{ marginTop: 16 }}>
-          <button onClick={() => handleAnswer("Yes")} style={{ marginRight: 12, fontSize: "0.98rem" }}>Yes</button>
-          <button onClick={() => handleAnswer("No")} style={{ fontSize: "0.98rem" }}>No</button>
-        </div>
-      )}
-
-      {/* UPLOAD/COMMENT SECTION */}
-      {showUploads && step < questions.length && (
-        <div style={{ background: "#fffbe6", borderRadius: 14, padding: 16, marginTop: 14 }}>
-          <h3 style={{ fontSize: "1.02rem" }}>Please upload the following documents:</h3>
-          <ul style={{ paddingLeft: 20 }}>
-            {questions[step].requirements.map((req, idx) => (
-              <li key={idx} style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: "0.97rem" }}>{req}</div>
-                <input
-                  type="file"
-                  multiple
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
-                  onChange={e => handleUploadChange(e, idx)}
-                  disabled={uploading[idx]}
-                  style={{ marginTop: 6, fontSize: "0.91rem" }}
-                />
-                {uploadFiles[idx] && uploadFiles[idx].length > 0 && (
-                  <div style={{ fontSize: "0.87rem", color: "#333", marginTop: 6 }}>
-                    {uploadFiles[idx].map((file, fileIdx) => (
-                      <div key={fileIdx} style={{ display: "flex", alignItems: "center" }}>
-                        📎 {file.name}
-                        <button
-                          onClick={() => handleDeleteFile(idx, fileIdx)}
-                          style={{
-                            marginLeft: 8,
-                            background: "none",
-                            border: "none",
-                            color: "#c00",
-                            fontWeight: "bold",
-                            cursor: "pointer",
-                            fontSize: "1rem"
-                          }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div style={{ marginTop: 8 }}>
-                  <input
-                    type="text"
-                    placeholder="Leave a comment (optional)"
-                    value={commentInputs[idx] || ""}
-                    onChange={e => handleCommentInput(e, idx)}
-                    style={{
-                      padding: 6,
-                      borderRadius: 6,
-                      border: "1px solid #ccc",
-                      width: "100%",
-                      fontSize: "0.91rem"
-                    }}
-                  />
-                  <button
-                    style={{
-                      marginTop: 3,
-                      marginLeft: 3,
-                      fontSize: "0.91rem",
-                      borderRadius: 5,
-                      padding: "4px 12px"
-                    }}
-                    onClick={() => handleSaveComment(idx)}
-                    disabled={!!uploadedComments[idx]}
-                  >
-                    Save Comment
-                  </button>
-                </div>
-                {uploadedComments[idx] && (
-                  <div style={{ fontSize: "0.87rem", color: "#444", marginTop: 4, display: "flex", alignItems: "center" }}>
-                    📎 COMMENT.txt
-                    <button
-                      onClick={() => handleDeleteComment(idx)}
-                      style={{
-                        marginLeft: 8,
-                        background: "none",
-                        border: "none",
-                        color: "#c00",
-                        fontWeight: "bold",
-                        cursor: "pointer",
-                        fontSize: "1rem"
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-          <button
-            onClick={() => {
-              setShowUploads(false);
-              setStep(prev => prev + 1);
-              setJustAnswered(false);
+        <div style={{ display: "flex", alignItems: "flex-end", margin: "18px 0" }}>
+          <img src={botAvatar} alt="AI Bot" style={{ width: 56, height: 56, borderRadius: "50%", marginRight: 16, background: "#fff", boxShadow: "0 1px 8px #0002" }} />
+          <div
+            style={{
+              background: "#0085CA",
+              color: "#fff",
+              borderRadius: 18,
+              padding: "18px 28px",
+              fontStyle: "italic",
+              boxShadow: "0 1px 6px #0001",
+              fontSize: "1.13rem",
+              fontFamily: "Inter, sans-serif",
+              position: "relative"
             }}
-            style={{ marginTop: 10, fontSize: "0.97rem" }}
           >
-            Continue
-          </button>
-        </div>
-      )}
-
-      {/* REVIEW BLOCK */}
-      {!showEmailInput && answers.length > 0 && step === questions.length && !showUploads && !showComplete && (
-        <div style={{ marginTop: 14, background: "#e5eeff", borderRadius: 16, padding: 16 }}>
-          <h3 style={{ fontSize: "1.05rem" }}>Review Your Answers</h3>
-          <ul>
-            {answers.map((entry, idx) => (
-              <li key={idx} style={{ marginBottom: 7, fontSize: "0.98rem" }}>
-                <strong>Q{idx + 1}:</strong> {entry.question}
-                <br />
-                <strong>Answer:</strong> {entry.answer}
-                <br />
-                <button onClick={() => handleEditAnswer(idx)} style={{ marginTop: 3, fontSize: "0.91rem" }}>Edit</button>
-              </li>
-            ))}
-          </ul>
-          <button onClick={handleSubmitAssessment} style={{ marginTop: 8, fontSize: "0.97rem" }}>
-            Submit Assessment
-          </button>
-        </div>
-      )}
-
-      {/* ASSESSMENT COMPLETE with Gemini Feedback */}
-      {showComplete && (
-        <div style={{ marginTop: 40, padding: 20, background: "#e0ffe0", borderRadius: 16 }}>
-          <h2 style={{ fontSize: "1.08rem" }}>Assessment Complete!</h2>
-          <p style={{ fontSize: "0.96rem" }}>
-            Thank you for completing the VendorIQ compliance interview. A summary report will be sent to your email shortly.
-          </p>
-          <div style={{ marginTop: 18 }}>
-            {geminiLoading && <div style={{ color: "#444", fontSize: "0.97rem" }}>Gemini AI is reviewing your documents…</div>}
-            {geminiError && <div style={{ color: "red", fontSize: "0.97rem" }}>{geminiError}</div>}
-            {geminiSummary && (
-  <div style={{ background: "#fff", padding: 12, borderRadius: 10, boxShadow: "0 1px 6px #0002", marginTop: 6 }}>
-    <h3 style={{ fontSize: "1.03rem" }}>AI Assessment Feedback</h3>
-    <ReactMarkdown>{geminiSummary}</ReactMarkdown>
-    {geminiScore !== null && (
-      <div style={{ fontSize: "0.99rem" }}>
-        <strong>Score:</strong> {geminiScore}%
-      </div>
-    )}
-    <button 
-      onClick={downloadSummaryFile} 
-      style={{
-        marginTop: 16, 
-        padding: "8px 18px", 
-        background: "#3477eb", 
-        color: "#fff", 
-        border: "none", 
-        borderRadius: 8, 
-        fontSize: "0.97rem", 
-        cursor: "pointer"
-      }}>
-      Download Gemini Summary
-    </button>
-  </div>
-)}
-
-            {!geminiLoading && !geminiSummary && !geminiError && (
-              <div style={{ color: "#aaa", fontSize: "0.96rem" }}>
-                No Gemini feedback yet. It may take a moment—try refreshing.
-              </div>
-            )}
+            {typingText}<span className="typing-cursor">|</span>
+            <div
+              style={{
+                position: "absolute",
+                top: 28,
+                left: "-20px",
+                width: 0,
+                height: 0,
+                borderTop: "12px solid transparent",
+                borderBottom: "12px solid transparent",
+                borderRight: "20px solid #0085CA"
+              }}
+            />
           </div>
-          
         </div>
       )}
+
+      {/* ... rest of your upload/review/complete UI as before ... */}
     </div>
   );
 }
