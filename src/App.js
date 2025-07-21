@@ -46,7 +46,7 @@ const questions = [
       "Last three (03) years statistics including incidents, near misses, fatalities, work related illness."
     ]
   }
-];
+ ];
 
 // =============== MAIN COMPONENT ===============
 export default function App() {
@@ -76,33 +76,20 @@ export default function App() {
   const [geminiLoading, setGeminiLoading] = useState(false);
   const [geminiError, setGeminiError] = useState('');
 
-  // ---- Helper: Save Q&A to Supabase ----
-  async function saveQAToSupabase(questionIdx, answer) {
-    if (!email || !sessionId) return;
-    const q = questions[questionIdx];
-    const content = `Question: ${q.text}\nAnswer: ${answer}`;
+  // ---- PATCH: Save Q&A to Supabase after each answer ----
+  async function saveQAtoSupabase(questionIdx, answerText) {
+    if (!sessionId || !email) return;
+    const question = questions[questionIdx];
+    const content = `Question: ${question.text}\nAnswer: ${answerText}`;
     const fileBlob = new Blob([content], { type: "text/plain" });
-    const filePath = `uploads/${sessionId}_${email}/question-${q.number}.txt`;
-    try {
-      await supabase.storage.from('uploads').upload(filePath, fileBlob, { upsert: true, contentType: "text/plain" });
-    } catch (err) {
-      console.error("Q&A upload failed", err);
-    }
+    const filePath = `uploads/${sessionId}_${email}/question-${question.number}-QA.txt`;
+    await supabase.storage.from('uploads').upload(filePath, fileBlob, { upsert: true, contentType: "text/plain" });
   }
 
-  function downloadSummaryFile() {
-    if (!geminiSummary) return;
-    const blob = new Blob([geminiSummary], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = "VendorIQ_AI_Summary.txt";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
+  // ===== Email validation =====
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
+  // ===== Animated question typing =====
   const startTypingQuestion = (stepIndex) => {
     const question = questions[stepIndex].text;
     setTyping(true);
@@ -122,6 +109,7 @@ export default function App() {
     }, 10);
   };
 
+  // ===== Session =====
   const initSession = async () => {
     if (!validateEmail(email)) {
       alert("Please enter a valid email address.");
@@ -150,6 +138,7 @@ export default function App() {
     setTimeout(() => setStep(sessionStep), 350);
   };
 
+  // ===== Question sequence/typing ====
   useEffect(() => {
     if (step >= 0 && step < questions.length && !justAnswered && !showUploads) {
       setUploadFiles({});
@@ -163,8 +152,8 @@ export default function App() {
     // eslint-disable-next-line
   }, [step, justAnswered, showUploads, reviewConfirmed]);
 
-  // ---- PATCHED: async and calls saveQAToSupabase ----
-  const handleAnswer = async (answer) => {
+  // ===== Handle answer =====
+  const handleAnswer = (answer) => {
     const currentQuestion = questions[step];
     setAnswers(prev => {
       const updated = [...prev];
@@ -173,10 +162,7 @@ export default function App() {
     });
     setMessages(prev => [...prev, { from: "user", text: answer }]);
     setJustAnswered(true);
-
-    // Save Q&A .txt to Supabase storage
-    await saveQAToSupabase(step, answer);
-
+    saveQAtoSupabase(step, answer); // <-- PATCH: Save Q&A after every answer!
     if (answer === "Yes" && currentQuestion.requirements.length > 0) {
       setShowUploads(true);
     } else {
@@ -187,6 +173,7 @@ export default function App() {
     }
   };
 
+  // ====== Handle multi file upload ======
   const handleUploadChange = async (e, reqIdx) => {
     const files = Array.from(e.target.files).slice(0, 3);
     setUploading(prev => ({ ...prev, [reqIdx]: true }));
@@ -203,37 +190,40 @@ export default function App() {
     setUploading(prev => ({ ...prev, [reqIdx]: false }));
   };
 
+  // ====== Handle comment input ======
   const handleCommentInput = (e, reqIdx) => {
     setCommentInputs(prev => ({ ...prev, [reqIdx]: e.target.value }));
   };
 
+  // ====== Save comments as .txt files per requirement ======
   const handleSaveComment = async (reqIdx) => {
     const comment = commentInputs[reqIdx];
     if (comment && comment.trim()) {
       const fileBlob = new Blob([comment], { type: "text/plain" });
       const filePath = `uploads/${sessionId}_${email}/question-${questions[step].number}/req-${reqIdx + 1}-COMMENT.txt`;
-      await supabase.storage.from('uploaded_files').upload(filePath, fileBlob, { upsert: true, contentType: "text/plain" });
+      await supabase.storage.from('uploads').upload(filePath, fileBlob, { upsert: true, contentType: "text/plain" });
       setUploadedComments(prev => ({ ...prev, [reqIdx]: comment }));
       setCommentInputs(prev => ({ ...prev, [reqIdx]: "" }));
     }
   };
 
+  // ====== Delete upload or comment ======
   const handleDeleteFile = async (reqIdx, fileIdx) => {
     const file = uploadFiles[reqIdx][fileIdx];
     const filePath = `uploads/${sessionId}_${email}/question-${questions[step].number}/req-${reqIdx + 1}-${file.name}`;
-    await supabase.storage.from('uploaded_files').remove([filePath]);
+    await supabase.storage.from('uploads').remove([filePath]);
     setUploadFiles(prev => ({
       ...prev,
       [reqIdx]: prev[reqIdx].filter((_, i) => i !== fileIdx)
     }));
   };
-
   const handleDeleteComment = async (reqIdx) => {
     const filePath = `uploads/${sessionId}_${email}/question-${questions[step].number}/req-${reqIdx + 1}-COMMENT.txt`;
-    await supabase.storage.from('uploaded_files').remove([filePath]);
+    await supabase.storage.from('uploads').remove([filePath]);
     setUploadedComments(prev => ({ ...prev, [reqIdx]: undefined }));
   };
 
+  // ===== Submit assessment & fetch Gemini feedback =====
   const handleSubmitAssessment = async () => {
     setReviewConfirmed(true);
     setGeminiLoading(true);
@@ -261,6 +251,7 @@ export default function App() {
     }
   };
 
+  // ====== Edit answer ======
   const handleEditAnswer = (index) => {
     setStep(index);
     setShowUploads(false);
@@ -269,13 +260,26 @@ export default function App() {
     setMessages(prev => [...prev, { from: "bot", text: `Let's revisit Question ${index + 1}` }]);
   };
 
+  // ====== Back to Review after Assessment Complete ======
   const handleBackToReview = () => {
     setShowComplete(false);
     setReviewConfirmed(false);
     setStep(questions.length);
   };
 
-  // --- UI ---
+  // ====== Download Gemini summary ======
+  function downloadSummaryFile() {
+    if (!geminiSummary) return;
+    const blob = new Blob([geminiSummary], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = "VendorIQ_AI_Summary.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ============ UI =============
   return (
     <div style={{ maxWidth: 700, margin: "40px auto", fontFamily: "sans-serif" }}>
       <nav style={{
