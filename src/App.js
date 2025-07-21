@@ -90,7 +90,7 @@ export default function App() {
     const q = questions[step];
     if (!justAnswered) {
       return [
-	    "I’ll be your guide today—just answer a few questions, and I’ll help you every step of the way."
+	    "I’ll be your guide today—just answer a few questions, and I’ll help you every step of the way.",
 		'Let's talk about your company's safety practices.\n\n**Question ${q.number}:** ${q.text}`;
 		];
     }
