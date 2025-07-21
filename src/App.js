@@ -46,7 +46,7 @@ const questions = [
       "Last three (03) years statistics including incidents, near misses, fatalities, work related illness."
     ]
   }
- ];
+];
 
 // =============== MAIN COMPONENT ===============
 export default function App() {
@@ -76,7 +76,20 @@ export default function App() {
   const [geminiLoading, setGeminiLoading] = useState(false);
   const [geminiError, setGeminiError] = useState('');
 
- // <--- PLACE THE FUNCTION HERE, after your hooks! --->
+  // ---- Helper: Save Q&A to Supabase ----
+  async function saveQAToSupabase(questionIdx, answer) {
+    if (!email || !sessionId) return;
+    const q = questions[questionIdx];
+    const content = `Question: ${q.text}\nAnswer: ${answer}`;
+    const fileBlob = new Blob([content], { type: "text/plain" });
+    const filePath = `uploads/${sessionId}_${email}/question-${q.number}.txt`;
+    try {
+      await supabase.storage.from('uploaded_files').upload(filePath, fileBlob, { upsert: true, contentType: "text/plain" });
+    } catch (err) {
+      console.error("Q&A upload failed", err);
+    }
+  }
+
   function downloadSummaryFile() {
     if (!geminiSummary) return;
     const blob = new Blob([geminiSummary], { type: "text/markdown" });
@@ -87,10 +100,9 @@ export default function App() {
     a.click();
     URL.revokeObjectURL(url);
   }
-  // ===== Email validation =====
+
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-  // ===== Animated question typing =====
   const startTypingQuestion = (stepIndex) => {
     const question = questions[stepIndex].text;
     setTyping(true);
@@ -110,7 +122,6 @@ export default function App() {
     }, 10);
   };
 
-  // ===== Session =====
   const initSession = async () => {
     if (!validateEmail(email)) {
       alert("Please enter a valid email address.");
@@ -139,7 +150,6 @@ export default function App() {
     setTimeout(() => setStep(sessionStep), 350);
   };
 
-  // ===== Question sequence/typing ====
   useEffect(() => {
     if (step >= 0 && step < questions.length && !justAnswered && !showUploads) {
       setUploadFiles({});
@@ -153,8 +163,8 @@ export default function App() {
     // eslint-disable-next-line
   }, [step, justAnswered, showUploads, reviewConfirmed]);
 
-  // ===== Handle answer =====
-  const handleAnswer = (answer) => {
+  // ---- PATCHED: async and calls saveQAToSupabase ----
+  const handleAnswer = async (answer) => {
     const currentQuestion = questions[step];
     setAnswers(prev => {
       const updated = [...prev];
@@ -163,6 +173,10 @@ export default function App() {
     });
     setMessages(prev => [...prev, { from: "user", text: answer }]);
     setJustAnswered(true);
+
+    // Save Q&A .txt to Supabase storage
+    await saveQAToSupabase(step, answer);
+
     if (answer === "Yes" && currentQuestion.requirements.length > 0) {
       setShowUploads(true);
     } else {
@@ -173,7 +187,6 @@ export default function App() {
     }
   };
 
-  // ====== Handle multi file upload ======
   const handleUploadChange = async (e, reqIdx) => {
     const files = Array.from(e.target.files).slice(0, 3);
     setUploading(prev => ({ ...prev, [reqIdx]: true }));
@@ -190,12 +203,10 @@ export default function App() {
     setUploading(prev => ({ ...prev, [reqIdx]: false }));
   };
 
-  // ====== Handle comment input ======
   const handleCommentInput = (e, reqIdx) => {
     setCommentInputs(prev => ({ ...prev, [reqIdx]: e.target.value }));
   };
 
-  // ====== Save comments as .txt files per requirement ======
   const handleSaveComment = async (reqIdx) => {
     const comment = commentInputs[reqIdx];
     if (comment && comment.trim()) {
@@ -207,7 +218,6 @@ export default function App() {
     }
   };
 
-  // ====== Delete upload or comment ======
   const handleDeleteFile = async (reqIdx, fileIdx) => {
     const file = uploadFiles[reqIdx][fileIdx];
     const filePath = `uploads/${sessionId}_${email}/question-${questions[step].number}/req-${reqIdx + 1}-${file.name}`;
@@ -217,13 +227,13 @@ export default function App() {
       [reqIdx]: prev[reqIdx].filter((_, i) => i !== fileIdx)
     }));
   };
+
   const handleDeleteComment = async (reqIdx) => {
     const filePath = `uploads/${sessionId}_${email}/question-${questions[step].number}/req-${reqIdx + 1}-COMMENT.txt`;
     await supabase.storage.from('uploaded_files').remove([filePath]);
     setUploadedComments(prev => ({ ...prev, [reqIdx]: undefined }));
   };
 
-  // ===== Submit assessment & fetch Gemini feedback =====
   const handleSubmitAssessment = async () => {
     setReviewConfirmed(true);
     setGeminiLoading(true);
@@ -251,7 +261,6 @@ export default function App() {
     }
   };
 
-  // ====== Edit answer ======
   const handleEditAnswer = (index) => {
     setStep(index);
     setShowUploads(false);
@@ -260,14 +269,13 @@ export default function App() {
     setMessages(prev => [...prev, { from: "bot", text: `Let's revisit Question ${index + 1}` }]);
   };
 
-  // ====== Back to Review after Assessment Complete ======
   const handleBackToReview = () => {
     setShowComplete(false);
     setReviewConfirmed(false);
     setStep(questions.length);
   };
 
-  // ============ UI =============
+  // --- UI ---
   return (
     <div style={{ maxWidth: 700, margin: "40px auto", fontFamily: "sans-serif" }}>
       <nav style={{
@@ -476,30 +484,30 @@ export default function App() {
             {geminiLoading && <div style={{ color: "#444", fontSize: "0.97rem" }}>Gemini AI is reviewing your documents…</div>}
             {geminiError && <div style={{ color: "red", fontSize: "0.97rem" }}>{geminiError}</div>}
             {geminiSummary && (
-  <div style={{ background: "#fff", padding: 12, borderRadius: 10, boxShadow: "0 1px 6px #0002", marginTop: 6 }}>
-    <h3 style={{ fontSize: "1.03rem" }}>AI Assessment Feedback</h3>
-    <ReactMarkdown>{geminiSummary}</ReactMarkdown>
-    {geminiScore !== null && (
-      <div style={{ fontSize: "0.99rem" }}>
-        <strong>Score:</strong> {geminiScore}%
-      </div>
-    )}
-    <button 
-      onClick={downloadSummaryFile} 
-      style={{
-        marginTop: 16, 
-        padding: "8px 18px", 
-        background: "#3477eb", 
-        color: "#fff", 
-        border: "none", 
-        borderRadius: 8, 
-        fontSize: "0.97rem", 
-        cursor: "pointer"
-      }}>
-      Download Gemini Summary
-    </button>
-  </div>
-)}
+              <div style={{ background: "#fff", padding: 12, borderRadius: 10, boxShadow: "0 1px 6px #0002", marginTop: 6 }}>
+                <h3 style={{ fontSize: "1.03rem" }}>AI Assessment Feedback</h3>
+                <ReactMarkdown>{geminiSummary}</ReactMarkdown>
+                {geminiScore !== null && (
+                  <div style={{ fontSize: "0.99rem" }}>
+                    <strong>Score:</strong> {geminiScore}%
+                  </div>
+                )}
+                <button
+                  onClick={downloadSummaryFile}
+                  style={{
+                    marginTop: 16,
+                    padding: "8px 18px",
+                    background: "#3477eb",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 8,
+                    fontSize: "0.97rem",
+                    cursor: "pointer"
+                  }}>
+                  Download Gemini Summary
+                </button>
+              </div>
+            )}
 
             {!geminiLoading && !geminiSummary && !geminiError && (
               <div style={{ color: "#aaa", fontSize: "0.96rem" }}>
@@ -507,7 +515,6 @@ export default function App() {
               </div>
             )}
           </div>
-          
         </div>
       )}
     </div>
