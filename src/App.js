@@ -84,7 +84,7 @@ export default function App() {
     const fileBlob = new Blob([content], { type: "text/plain" });
     const filePath = `uploads/${sessionId}_${email}/question-${q.number}.txt`;
     try {
-      await supabase.storage.from('uploaded_files').upload(filePath, fileBlob, { upsert: true, contentType: "text/plain" });
+      await supabase.storage.from('uploads').upload(filePath, fileBlob, { upsert: true, contentType: "text/plain" });
     } catch (err) {
       console.error("Q&A upload failed", err);
     }
