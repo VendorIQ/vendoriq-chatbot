@@ -1,0 +1,169 @@
+require("dotenv").config();
+const fs = require("fs");
+const path = require("path");
+const pdfParse = require("pdf-parse");
+const Tesseract = require("tesseract.js");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { createClient } = require("@supabase/supabase-js");
+const express = require("express");
+const cors = require("cors");
+const multer = require("multer");
+
+// === SETUP ===
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY
+);
+const bucket = "uploads";
+const upload = multer({ dest: "/tmp" });
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// --- Question reference/scoring data: You can put all 25 here for real deployment!
+const questionPrompts = {
+  1: {
+    text: `Does your Company have a written OHS Policy that has been approved by your top management and has been communicated throughout the organization and to your subcontractors (when applicable)?`,
+    expected: `A copy of the OHS Policy.`,
+    checkpoints: `The assessor must verify if the Company has an OHS Policy and if the OHS Policy:
+- has been signed off by the Company's top management
+- has been communicated throughout the organization and to its subcontractors (when applicable)
+- has issued according to company's document control process (have doc. no, date, company logo etc.)
+- is up-to-date`,
+    scoring: `Stretch (5 marks); Commitment (4 Marks); Robust (3 Marks); Warning (2 Marks); Off-Track (0 Mark)
+Score based on how many checkpoints are clearly met, and whether policy appears current, official, and communicated.`
+  },
+  2: {
+    text: `Has your Company committed any infringements to the laws or regulations concerning Occupational Health & Safety (OHS) matters in the last three (03) years or is under any current investigation by, or in discussions with, any regulatory authority in respect of any OHS matters, accident or alleged breach of OHS laws or regulations?`,
+    expected: `A declaration from your top management that your company has not committed any infringements to the laws or regulations or is not under any current investigation by any regulatory authority in respect of any OHS matters (Statement should be signed off by CEO with official letterhead, stamp, etc.)`,
+    checkpoints: `The assessor must verify that the Company:
+- has a documented process for the systematic identification and assessment of legal compliance
+- has identified all its applicable legal requirements
+- has assessed its compliance against its legal obligations periodically and the process in place to manage and close the gaps identified.`,
+    scoring: `Stretch (5 marks); Commitment (4 Marks); Robust (3 Marks); Warning (2 Marks); Off-Track (0 Mark)
+Score based on completeness, authenticity, and clarity of legal compliance documentation.`
+  },
+  3: {
+    text: `Does the company have a process for Incident Reporting and Investigation, including a system for recording safety incidents (near misses, injuries, fatalities etc.) that meets local regulations and Ericsson's OHS Requirements at a minimum?`,
+    expected: `A copy of the documented process (i.e. procedure, instruction), evidence of investigations, root causes, and action plans, and incident statistics for last three years.`,
+    checkpoints: `The assessor must verify that the Company:
+- has a process for Accident & Incident Reporting and Investigation including root cause analysis
+- a system for recording safety incidents that meets local regulations and Ericsson's OHS Requirements
+- evidence of investigation, corrective action, and follow-up.
+If no incidents, a declaration from top management is provided.`,
+    scoring: `Stretch (5 marks); Commitment (4 Marks); Robust (3 Marks); Warning (2 Marks); Off-Track (0 Mark)
+Score based on process clarity, actual evidence, and history of documented corrective actions.`
+  },
+  // ... Add questions 4-25 here ...
+};
+
+// === OCR LANGUAGES ===
+const TESS_LANGS = ["eng", "ind", "tha", "vie"];
+
+// === TEXT EXTRACTOR ===
+async function extractText(localPath, originalName) {
+  const ext = originalName.split('.').pop().toLowerCase();
+  let text = "";
+  if (ext === "pdf") {
+    const data = await pdfParse(fs.readFileSync(localPath));
+    text = data.text;
+  } else if (["jpg", "jpeg", "png"].includes(ext)) {
+    for (const lang of TESS_LANGS) {
+      try {
+        const { data: { text: ocrText } } = await Tesseract.recognize(localPath, lang);
+        if (ocrText && ocrText.trim().length > 10) {
+          text = ocrText;
+          break;
+        }
+      } catch (e) { }
+    }
+  } else if (["txt"].includes(ext)) {
+    text = fs.readFileSync(localPath, "utf-8");
+  }
+  return text;
+}
+
+// === GEMINI CHECK PER QUESTION ===
+app.post("/api/gemini-check-file", upload.single("file"), async (req, res) => {
+  try {
+    const { email, questionNumber } = req.body;
+    if (!req.file) return res.json({ success: false, feedback: "No file uploaded." });
+    const qNum = parseInt(questionNumber);
+    if (!qNum || !questionPrompts[qNum]) return res.json({ success: false, feedback: "Invalid or missing question number." });
+
+    const filePath = req.file.path;
+    const fileName = req.file.originalname;
+
+    // Extract text from file
+    let text = "";
+    try {
+      text = await extractText(filePath, fileName);
+    } catch (e) { text = ""; }
+    fs.unlinkSync(filePath);
+
+    if (!text || !text.trim()) {
+      return res.json({
+        success: false,
+        feedback: "Your document could not be read. Please upload a clear, readable file (PDF, Word, or image) with visible content."
+      });
+    }
+
+    // Build dynamic prompt for THIS QUESTION
+    const q = questionPrompts[qNum];
+    const prompt = `
+You are an OHS compliance auditor. For the following question, review the vendor's uploaded document and provide:
+
+1. A **score**: Stretch (5 marks); Commitment (4 Marks); Robust (3 Marks); Warning (2 Marks); Off-Track (0 Mark)
+2. A **short summary** (1-2 sentences) as to why you gave this score.
+3. **Suggestions for improvement** (if any).
+
+Refer STRICTLY to the reference compliance requirements below. ONLY consider evidence in the provided file content.
+
+---
+**Assessment Question:**  
+${q.text}
+
+**Expected Evidence:**  
+${q.expected}
+
+**Compliance Checkpoints:**  
+${q.checkpoints}
+
+**Scoring Guide:**  
+${q.scoring}
+
+---
+**File content:**  
+${text}
+
+---
+
+Return in this format:
+
+Score: [write the band, e.g. "Robust (3 Marks)"]
+Summary: [reason for your score]
+Suggestions: [bullet points if any, else "None"]
+`;
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent(prompt);
+    const feedback = result.response.text();
+
+    // Save to Supabase if needed (optional, not required for frontend to work)
+    // await supabase.from("compliance_reviews").insert({ email, question_number: qNum, feedback });
+
+    res.json({ success: true, feedback });
+  } catch (err) {
+    console.error("ERROR in /api/gemini-check-file:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// === (OPTIONAL) BULK SUMMARY ENDPOINT HERE IF YOU WANT ===
+
+// === START SERVER ===
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log(`VendorIQ Gemini API listening on port ${PORT}`);
+});

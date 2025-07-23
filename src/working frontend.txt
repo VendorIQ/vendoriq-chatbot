@@ -166,42 +166,41 @@ export default function App() {
     setShowIntro(true);
     sendBubblesSequentially(getBotMessage({ step: -1 }), "bot", 650, () => {
       setShowIntro(false); // End intro
-setStep(sessionStep);
-setMessages(prev => [
-  ...prev,
-  { from: "bot", text: `**Question ${questions[sessionStep].number}:** ${questions[sessionStep].text}` }
-]);
-
+      setStep(sessionStep);
     });
   };
 
- // --- Question effect ---
-useEffect(() => {
-  if (step >= questions.length && !showSummary) {
-    // Call new AI summary API
-    async function fetchSummary() {
-      setTyping(true);
-      setTypingText("Generating assessment summary...");
-      try {
-        const response = await fetch("https://4d66d45e-0288-4203-935e-1c5d2a182bde-00-38ratc2twzear.pike.replit.dev/api/session-summary", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email })
-        });
-        const result = await response.json();
-        setSummary(result.feedback || "No summary found.");
-        setShowSummary(true);
-      } catch (err) {
-        setSummary("Failed to generate summary. Please contact support.");
-        setShowSummary(true);
+  // --- Question effect ---
+  useEffect(() => {
+    if (step >= 0 && step < questions.length && !justAnswered && !showUploads && !showIntro) {
+      sendBubblesSequentially(getBotMessage({ step, justAnswered: false }));
+    } else if (step >= questions.length && !showSummary) {
+      // Call API to get session summary
+      async function fetchSummary() {
+        setTyping(true);
+        setTypingText("Generating assessment summary...");
+        try {
+          const response = await fetch("https://4d66d45e-0288-4203-935e-1c5d2a182bde-00-38ratc2twzear.pike.replit.dev/api/run-gemini-feedback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, sessionId })
+          });
+          const result = await response.json();
+          setSummary(result.feedback);
+          setScore(result.score);
+          setShowSummary(true);
+        } catch (err) {
+          setSummary("Failed to generate summary. Please contact support.");
+          setShowSummary(true);
+        }
+        setTyping(false);
+        setTypingText("");
       }
-      setTyping(false);
-      setTypingText("");
+      fetchSummary();
     }
-    fetchSummary();
-  }
-  // eslint-disable-next-line
-}, [step, justAnswered, showUploads, showIntro]);
+
+    // eslint-disable-next-line
+  }, [step, justAnswered, showUploads, showIntro]);
 
   // --- Handle answer ---
   const handleAnswer = (answer) => {
@@ -212,17 +211,7 @@ useEffect(() => {
         setShowUploads(true);
       } else {
         setTimeout(() => {
-          setStep(prev => {
-  const newStep = prev + 1;
-  // Only push if not finished!
-  if (newStep < questions.length) {
-    setMessages(messages => [
-      ...messages,
-      { from: "bot", text: `**Question ${questions[newStep].number}:** ${questions[newStep].text}` }
-    ]);
-  }
-  return newStep;
-});
+          setStep(prev => prev + 1);
           setJustAnswered(false);
         }, 350);
       }
@@ -268,7 +257,7 @@ useEffect(() => {
             flexDirection: msg.from === "bot" ? "row" : "row-reverse",
             alignItems: "center",
             margin: "22px 0",
-            maxWidth: "80%"
+            maxWidth: "70%"
           }}
         >
           <img
@@ -279,7 +268,7 @@ useEffect(() => {
               height: 48,
               borderRadius: "50%",
               background: "#fff",
-              margin: msg.from === "bot" ? "0 30px 0 50px" : "0 -90px 0 16px",
+              margin: msg.from === "bot" ? "0 16px 0 0" : "0 0 0 16px",
               boxShadow: "0 1px 8px #0002",
               alignSelf: "center"
             }}
@@ -289,10 +278,10 @@ useEffect(() => {
               background: msg.from === "bot" ? "#0085CA" : "#6D7B8D",
               color: "#fff",
               borderRadius: "18px",
-              padding: "0px 20px",
+              padding: "1px 28px",
               minWidth: 48,
-              maxWidth: "100%",
-              fontSize: "1rem",
+              maxWidth: "70%",
+              fontSize: "1.13rem",
               fontFamily: "Inter, sans-serif",
               boxShadow: "0 1px 6px #0001",
               position: "relative",
@@ -301,53 +290,26 @@ useEffect(() => {
             }}
           >
             <ReactMarkdown>{msg.text}</ReactMarkdown>
-            </div>
+            <div
+              style={{
+                position: "absolute",
+                top: 17,
+                [msg.from === "bot" ? "left" : "right"]: "-20px",
+                width: 0,
+                height: 0,
+                borderTop: "12px solid transparent",
+                borderBottom: "12px solid transparent",
+                borderRight: msg.from === "bot"
+                  ? "20px solid #0085CA"
+                  : "none",
+                borderLeft: msg.from === "bot"
+                  ? "none"
+                  : "20px solid #6D7B8D"
+              }}
+            />
+          </div>
         </div>
       ))}
-	  
-	  {/* FINAL SUMMARY CARD */}
-{showSummary && (
-  <div
-    style={{
-      background: "#fff",
-      borderRadius: 14,
-      margin: "32px auto 0 auto",
-      padding: "30px 22px",
-      maxWidth: 550,
-      boxShadow: "0 2px 12px #0001",
-      color: "#223",
-      fontSize: "1.11rem",
-      textAlign: "left"
-    }}
-  >
-    <h3 style={{ color: "#0085CA", marginTop: 0 }}>
-      <span role="img" aria-label="report">📝</span> Final Assessment Summary
-    </h3>
-    {score && (
-      <div style={{ fontWeight: 700, fontSize: "1.22rem", color: "#157A4A", marginBottom: 8 }}>
-        Overall Score: {score} / 100
-      </div>
-    )}
-    <ReactMarkdown>{summary}</ReactMarkdown>
-    <div style={{ textAlign: "center", marginTop: 16 }}>
-      <button
-        style={{
-          background: "#0085CA",
-          color: "#fff",
-          border: "none",
-          borderRadius: 7,
-          padding: "8px 22px",
-          fontSize: "1.01rem",
-          cursor: "pointer"
-        }}
-        onClick={() => window.location.reload()}
-      >
-        Restart Interview
-      </button>
-    </div>
-  </div>
-)}
-
 
       {/* TYPING */}
       {typing && (
@@ -378,7 +340,7 @@ useEffect(() => {
               padding: "18px 28px",
               minWidth: 48,
               maxWidth: "70%",
-              fontSize: "1rem",
+              fontSize: "1.13rem",
               fontFamily: "Inter, sans-serif",
               boxShadow: "0 1px 6px #0001",
               position: "relative",
@@ -388,7 +350,18 @@ useEffect(() => {
             }}
           >
             {typingText}<span className="typing-cursor">|</span>
-            
+            <div
+              style={{
+                position: "absolute",
+                top: 28,
+                left: "-20px",
+                width: 0,
+                height: 0,
+                borderTop: "12px solid transparent",
+                borderBottom: "12px solid transparent",
+                borderRight: "20px solid #0085CA"
+              }}
+            />
           </div>
         </div>
       )}
@@ -400,21 +373,9 @@ useEffect(() => {
           requirementIdx={uploadReqIdx}
           setRequirementIdx={setUploadReqIdx}
           onDone={() => {
-			    console.log('App: onDone called, step will advance.');
             setShowUploads(false);
             setUploadReqIdx(0);
-            setStep(prev => {
-  const newStep = prev + 1;
-  // Only push if not finished!
-  if (newStep < questions.length) {
-    setMessages(messages => [
-      ...messages,
-      { from: "bot", text: `**Question ${questions[newStep].number}:** ${questions[newStep].text}` }
-    ]);
-  }
-  return newStep;
-});
-
+            setStep(prev => prev + 1);
             setJustAnswered(false);
           }}
           email={email}
@@ -496,7 +457,18 @@ function UploadSection({
           }}
         >
           {`Please upload: ${requirement}`}
-          
+          <div
+            style={{
+              position: "absolute",
+              top: 14,
+              left: "-18px",
+              width: 0,
+              height: 0,
+              borderTop: "8px solid transparent",
+              borderBottom: "8px solid transparent",
+              borderRight: "18px solid #0085CA"
+            }}
+          />
         </div>
       </div>
       {/* Only show file input if no file is selected */}
@@ -591,11 +563,7 @@ function UploadSection({
                   if (requirementIdx + 1 < question.requirements.length) {
                     setTimeout(() => setRequirementIdx(requirementIdx + 1), 650);
                   } else {
-                     setMessages(prev => [
-					 ...prev,
-					 { from: "bot", text: "Thanks for submitting all the required documents for this question!" }
-  ]);
-					 setTimeout(onDone, 1200);
+                    setTimeout(onDone, 1000);
                   }
                 } else {
                   setMessages(prev => [
