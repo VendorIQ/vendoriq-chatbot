@@ -16,8 +16,7 @@ const supabase = createClient(
 // --- CONSTANTS ---
 const botAvatar = process.env.PUBLIC_URL + "/bot-avatar.png";
 const userAvatar = process.env.PUBLIC_URL + "/user-avatar.png";
-const GEMINI_API_URL =
-  process.env.REACT_APP_GEMINI_API_URL || "https://backend-chi-ten-55.vercel.app";
+const BACKEND_URL = "https://4d66d45e-0288-4203-935e-1c5d2a182bde-00-38ratc2twzear.pike.replit.dev";
 
 // --- QUESTIONS ---
 const questions = [
@@ -298,7 +297,7 @@ useEffect(() => {
 // --- Save answer to backend ---
 const saveAnswerToBackend = async (email, questionNumber, answer) => {
   try {
-    await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/save-answer`, {
+    await fetch(`${BACKEND_URL}/api/save-answer`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
        body: JSON.stringify({ email: user.email.trim().toLowerCase(), questionNumber, answer })
@@ -345,7 +344,7 @@ const saveAnswerToBackend = async (email, questionNumber, answer) => {
         setTyping(true);
         setTypingText("Generating assessment summary...");
         try {
-          const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/session-summary`, {
+          const response = await fetch(`${BACKEND_URL}/api/session-summary`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: user.email, sessionId }),
@@ -755,7 +754,7 @@ const [isDragActive, setIsDragActive] = useState(false);
       formData.append("email", email);
       formData.append("questionNumber", questionNumber);
 
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/check-file`, {
+      const response = await fetch(`${BACKEND_URL}/api/check-file`, {
         method: "POST",
         body: formData,
       });
@@ -822,7 +821,7 @@ const submitDisagreement = async () => {
       formData.append("file", disagreeFile);
     }
 
-    const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/disagree-feedback`, {
+    const res = await fetch(`${BACKEND_URL}/api/disagree-feedback`, {
       method: "POST",
       body: formData,
     });
