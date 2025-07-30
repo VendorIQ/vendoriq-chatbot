@@ -60,17 +60,15 @@ body {
   font-family: 'Inter', sans-serif;
 }
 
-/* BOT/AI BUBBLE */
 .bubble.bot {
-  background: #0085CA;   /* Pantone Process Blue */
+  background: #0085CA;
   color: #fff;
   align-self: flex-start;
   border-radius: 22px 22px 22px 6px;
 }
 
-/* USER BUBBLE */
 .bubble.user {
-  background: #6D7B8D;   /* Pantone 430 */
+  background: #6D7B8D;
   color: #fff;
   align-self: flex-end;
   border-radius: 22px 22px 6px 22px;
@@ -83,7 +81,6 @@ body {
   background: #0085CA;
 }
 
-/* Optionally, speech bubble tails using :after pseudo-elements */
 .bubble.bot::after {
   content: "";
   position: absolute;
@@ -127,7 +124,9 @@ body {
   cursor: pointer;
   transition: background 0.16s;
 }
-.answer-btn:hover { background: #174399; }
+.answer-btn:hover {
+  background: #174399;
+}
 
 .submit-btn {
   margin-top: 18px;
@@ -146,6 +145,7 @@ body {
   color: #444;
   cursor: not-allowed;
 }
+
 .restart-btn {
   padding: 9px 30px;
   background: #ff6262;
@@ -156,6 +156,153 @@ body {
   font-size: 1.12rem;
   cursor: pointer;
   margin-top: 12px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(-18deg);}
+  40% { transform: rotate(18deg);}
+  80% { transform: rotate(-18deg);}
+  100% { transform: rotate(-18deg);}
+}
+
+.hourglass-anim {
+  animation: spin 1.2s linear infinite;
+}
+
+.typing-cursor {
+  display: inline-block;
+  animation: blink 1.3s infinite steps(1, start);
+}
+@keyframes blink {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+html {
+  scroll-padding-top: 60px;
+}
+
+/* ==== Buttons ==== */
+
+.answer-btn {
+  background: #0085CA;
+  color: white;
+  border: none;
+  border-radius: 24px;
+  padding: 10px 24px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-right: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.answer-btn:hover {
+  background: #026ba3;
+}
+.answer-btn.alt {
+  background: #6D7B8D;
+}
+.answer-btn.alt:hover {
+  background: #54606e;
+}
+
+.upload-input {
+  font-size: 0.95rem;
+  padding: 6px;
+  margin-top: 6px;
+  cursor: pointer;
+}
+
+.skip-btn {
+  background: #0085CA;
+  color: white;
+  border: none;
+  padding: 8px 18px;
+  margin-left: 12px;
+  font-size: 0.95rem;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.skip-btn:hover {
+  background: #e68a00;
+}
+
+.browse-btn {
+  display: inline-block;
+  background: #ff9800;
+  color: white;
+  padding: 10px 22px;
+  border-radius: 24px;
+  font-size: 0.97rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: background 0.2s;
+}
+.browse-btn:hover {
+  background: #026ba3;
+}
+.browse-btn input[type="file"] {
+  display: none;
+}
+
+.upload-btn {
+  background-color: #e0e0e0;
+  color: #333;
+  font-weight: 600;
+  border: none;
+  border-radius: 20px;
+  padding: 10px 32px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background 0.2s ease-in-out;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.upload-btn:hover {
+  background-color: #d5d5d5;
+}
+
+.continue-btn {
+  background: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 10px 32px;
+  font-size: 0.96rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.continue-btn:hover {
+  background: #388e3c;
+}
+
+.disagree-btn {
+  background-color: #e53935;
+  color: #fff;
+  font-weight: 600;
+  border: none;
+  border-radius: 20px;
+  padding: 10px 32px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background 0.2s ease-in-out;
+}
+.disagree-btn:hover {
+  background-color: #c62828;
+}
+
+/* NEW: wrapper for uniform spacing */
+.button-group {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
 }
 
 code {
