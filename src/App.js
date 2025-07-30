@@ -17,7 +17,7 @@ const supabase = createClient(
 const botAvatar = process.env.PUBLIC_URL + "/bot-avatar.png";
 const userAvatar = process.env.PUBLIC_URL + "/user-avatar.png";
 const GEMINI_API_URL =
-  process.env.REACT_APP_GEMINI_API_URL || "http://localhost:11434/api/generate";
+  process.env.REACT_APP_GEMINI_API_URL || "https://backend-chi-ten-55.vercel.app";
 
 // --- QUESTIONS ---
 const questions = [
@@ -345,7 +345,7 @@ const saveAnswerToBackend = async (email, questionNumber, answer) => {
         setTyping(true);
         setTypingText("Generating assessment summary...");
         try {
-          const response = await fetch("http://localhost:8080/api/session-summary", {
+          const response = await fetch("https://backend-chi-ten-55.vercel.app/api/session-summary", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: user.email, sessionId }),
@@ -755,7 +755,7 @@ const [isDragActive, setIsDragActive] = useState(false);
       formData.append("email", email);
       formData.append("questionNumber", questionNumber);
 
-      const response = await fetch("http://localhost:8080/api/check-file", {
+      const response = await fetch("https://backend-chi-ten-55.vercel.app/api/check-file", {
         method: "POST",
         body: formData,
       });
@@ -822,7 +822,7 @@ const submitDisagreement = async () => {
       formData.append("file", disagreeFile);
     }
 
-    const res = await fetch("http://localhost:8080/api/disagree-feedback", {
+    const res = await fetch("https://backend-chi-ten-55.vercel.app/api/disagree-feedback", {
       method: "POST",
       body: formData,
     });
