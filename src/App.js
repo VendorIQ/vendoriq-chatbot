@@ -345,7 +345,7 @@ const saveAnswerToBackend = async (email, questionNumber, answer) => {
         setTyping(true);
         setTypingText("Generating assessment summary...");
         try {
-          const response = await fetch("https://backend-chi-ten-55.vercel.app/api/session-summary", {
+          const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/session-summary", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: user.email, sessionId }),
@@ -755,7 +755,7 @@ const [isDragActive, setIsDragActive] = useState(false);
       formData.append("email", email);
       formData.append("questionNumber", questionNumber);
 
-      const response = await fetch("https://backend-chi-ten-55.vercel.app/api/check-file", {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/check-file", {
         method: "POST",
         body: formData,
       });
@@ -822,7 +822,7 @@ const submitDisagreement = async () => {
       formData.append("file", disagreeFile);
     }
 
-    const res = await fetch("https://backend-chi-ten-55.vercel.app/api/disagree-feedback", {
+    const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/disagree-feedback", {
       method: "POST",
       body: formData,
     });
