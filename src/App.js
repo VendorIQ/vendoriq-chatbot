@@ -98,6 +98,10 @@ export default function App() {
   const [answers, setAnswers] = useState([]);
   const [reviewMode, setReviewMode] = useState(false);
   const chatEndRef = useRef(null);
+const [supplierNameLoading, setSupplierNameLoading] = useState(false);
+const [supplierName, setSupplierName] = useState("");   // holds detected or manually set company name
+const [editingSupplier, setEditingSupplier] = useState(false);
+const [inputSupplierName, setInputSupplierName] = useState("");
 const [disagreeMode, setDisagreeMode] = useState(false);
 const [disagreeFeedback, setDisagreeFeedback] = useState("");
 const [disagreeLoading, setDisagreeLoading] = useState(false);
@@ -195,6 +199,41 @@ function ProgressPopup({ results, questions, onJump, onClose }) {
     </div>
   );
 }
+// Fetch current supplier name for this user
+const fetchSupplierName = async () => {
+  if (!user?.email) return;
+  setSupplierNameLoading(true);
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/get-supplier-name?email=${user.email}`);
+    const data = await res.json();
+    setSupplierName(data.supplierName || "");
+  } catch {
+    setSupplierName("(not found)");
+  }
+  setSupplierNameLoading(false);
+};
+
+useEffect(() => {
+  if (user) fetchSupplierName();
+  // eslint-disable-next-line
+}, [user]);
+
+// Save edited supplier name
+const saveSupplierName = async () => {
+  if (!user?.email || !inputSupplierName.trim()) return;
+  const res = await fetch(`${BACKEND_URL}/api/set-supplier-name`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: user.email, supplierName: inputSupplierName }),
+  });
+  const data = await res.json();
+  if (data.success) {
+    setSupplierName(data.supplierName);
+    setEditingSupplier(false);
+  } else {
+    alert("Failed to update company name.");
+  }
+};
 
 
 useEffect(() => {
@@ -477,6 +516,104 @@ if (!user) {
   </div>
   <strong style={{ fontSize: "1.18rem", marginTop: 2 }}>VendorIQ Chatbot</strong>
 </nav>
+
+{/* --- Supplier Name Display and Correction --- */}
+{step === 0 && !showUploads && (
+  <div
+    style={{
+      background: "#fffde7",
+      border: "1.5px solid #ffeb3b",
+      borderRadius: 10,
+      padding: "14px 24px",
+      margin: "18px 0 4px 0",
+      display: "flex",
+      alignItems: "center",
+      gap: 18,
+      fontSize: "1.11rem",
+    }}
+  >
+    <div>
+      <b>Detected Company Name:</b>{" "}
+      {editingSupplier ? (
+        <input
+          type="text"
+          value={inputSupplierName}
+          onChange={e => setInputSupplierName(e.target.value)}
+          style={{
+            padding: "6px 12px",
+            fontSize: "1.03rem",
+            borderRadius: 6,
+            border: "1.5px solid #ddd",
+            minWidth: 180,
+          }}
+        />
+      ) : (
+        supplierNameLoading ? (
+          <span style={{ color: "#229cf9", fontStyle: "italic", marginLeft: 8 }}>
+            <span role="img" aria-label="hourglass">⏳</span> Loading...
+          </span>
+        ) : (
+          <span style={{ color: "#d8a900" }}>{supplierName || "(not found yet)"}</span>
+        )
+      )}
+    </div>
+    {/* ... your Save/Edit/Cancel buttons below ... */}
+  </div>
+)}
+    {editingSupplier ? (
+      <>
+        <button
+          onClick={saveSupplierName}
+          style={{
+            background: "#ffeb3b",
+            color: "#333",
+            border: "none",
+            borderRadius: 8,
+            padding: "7px 20px",
+            fontWeight: 600,
+            fontSize: "1.01rem",
+            marginLeft: 5,
+          }}
+        >
+          Save
+        </button>
+        <button
+          onClick={() => setEditingSupplier(false)}
+          style={{
+            background: "#f9f9f9",
+            color: "#444",
+            border: "1px solid #ddd",
+            borderRadius: 8,
+            padding: "7px 16px",
+            marginLeft: 3,
+            fontSize: "0.97rem",
+          }}
+        >
+          Cancel
+        </button>
+      </>
+    ) : (
+      <button
+        onClick={() => {
+          setInputSupplierName(supplierName || "");
+          setEditingSupplier(true);
+        }}
+        style={{
+          background: "#fffde7",
+          color: "#b89800",
+          border: "1px solid #ffeb3b",
+          borderRadius: 8,
+          padding: "7px 20px",
+          fontWeight: 600,
+          fontSize: "1.01rem",
+        }}
+      >
+        Edit Name
+      </button>
+    )}
+  </div>
+)}
+
 {showProgress && (
   <ProgressPopup
     results={results}
@@ -650,6 +787,7 @@ if (!user) {
   setReviewMode={setReviewMode}
   setStep={setStep}
   setJustAnswered={setJustAnswered}
+  fetchSupplierName={fetchSupplierName}
   showDisagreeModal={showDisagreeModal} //added
   setShowDisagreeModal={setShowDisagreeModal}
   disagreeReason={disagreeReason}
@@ -732,61 +870,68 @@ const [isDragActive, setIsDragActive] = useState(false);
 
 
   const handleUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploading(true);
-    setError("");
+  const file = e.target.files[0];
+  if (!file) return;
+  setUploading(true);
+  setError("");
 
-    // 1. Upload to Supabase
-    const filePath = `uploads/${sessionId}_${email}/question-${questionNumber}/requirement-${requirementIdx + 1}-${file.name}`;
-    const { error: uploadError } = await supabase.storage.from("uploads").upload(filePath, file, { upsert: true });
-    if (uploadError) {
-      setUploading(false);
-      setError("Upload failed: " + uploadError.message);
-      return;
-    }
-
-    // 2. Send to Ollama for AI feedback
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("requirement", requirement);
-      formData.append("email", email);
-      formData.append("questionNumber", questionNumber);
-
-      const response = await fetch(`${BACKEND_URL}/api/check-file`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) throw new Error("AI review failed");
-      const data = await response.json();
-
-      // 3. Build bubble message (requirement + feedback)
-      const botBubble = 
-  `🧾 **Question ${questionNumber}, Requirement ${requirementIdx + 1}:**\n\n` +
-  `**Requirement:**\n${requirement}\n\n` +
-  `**AI Review:**\n${data.feedback || "No feedback received."}`;
-
-      setMessages(prev => [...prev, { from: "bot", text: botBubble }]);
-      setUploaded(true);
-setAccepted(false); // <== Add this so logic works
-setResults(prev => {
-  const updated = [...prev];
-  // Find the question's index in results (usually step, but pass as prop if needed)
-  updated[questionNumber - 1].requirements[requirementIdx] = {
-    aiScore: data.score || null,
-    aiFeedback: data.feedback || ""
-  };
-  return updated;
-});
-
-    } catch (err) {
-      setError("AI review failed: " + err.message);
-    }
-
+  // 1. Upload to Supabase
+  const filePath = `uploads/${sessionId}_${email}/question-${questionNumber}/requirement-${requirementIdx + 1}-${file.name}`;
+  const { error: uploadError } = await supabase.storage.from("uploads").upload(filePath, file, { upsert: true });
+  if (uploadError) {
     setUploading(false);
-  };
+    setError("Upload failed: " + uploadError.message);
+    return;
+  }
+
+  // 2. Send to Ollama for AI feedback
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("requirement", requirement);
+    formData.append("email", email);
+    formData.append("questionNumber", questionNumber);
+
+    const response = await fetch(`${BACKEND_URL}/api/check-file`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) throw new Error("AI review failed");
+    const data = await response.json();
+
+    // 3. Build bubble message (requirement + feedback)
+    const botBubble = 
+      `🧾 **Question ${questionNumber}, Requirement ${requirementIdx + 1}:**\n\n` +
+      `**Requirement:**\n${requirement}\n\n` +
+      `**AI Review:**\n${data.feedback || "No feedback received."}`;
+
+    setMessages(prev => [...prev, { from: "bot", text: botBubble }]);
+    setUploaded(true);
+    setAccepted(false);
+
+    // Set result for this requirement
+    setResults(prev => {
+      const updated = [...prev];
+      updated[questionNumber - 1].requirements[requirementIdx] = {
+        aiScore: data.score || null,
+        aiFeedback: data.feedback || ""
+      };
+      return updated;
+    });
+
+    // --- PATCH: Refresh company name after uploading to Q1R1 ---
+    if (questionNumber === 1 && fetchSupplierName) {
+      fetchSupplierName();
+    }
+
+  } catch (err) {
+    setError("AI review failed: " + err.message);
+  }
+
+  setUploading(false);
+};
+
 const handleAccept = () => {
   // If there are more requirements for this question, go to the next requirement
   if (requirementIdx < question.requirements.length - 1) {
