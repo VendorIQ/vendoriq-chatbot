@@ -547,19 +547,68 @@ if (!user) {
             minWidth: 180,
           }}
         />
+      ) : supplierNameLoading ? (
+        <span style={{ color: "#229cf9", fontStyle: "italic", marginLeft: 8 }}>
+          <span role="img" aria-label="hourglass">⏳</span> Loading...
+        </span>
       ) : (
-        supplierNameLoading ? (
-          <span style={{ color: "#229cf9", fontStyle: "italic", marginLeft: 8 }}>
-            <span role="img" aria-label="hourglass">⏳</span> Loading...
-          </span>
-        ) : (
-          <span style={{ color: "#d8a900" }}>{supplierName || "(not found yet)"}</span>
-        )
+        <span style={{ color: "#d8a900" }}>{supplierName || "(not found yet)"}</span>
       )}
     </div>
-    {/* ... your Save/Edit/Cancel buttons below ... */}
+    {editingSupplier ? (
+      <>
+        <button
+          onClick={saveSupplierName}
+          style={{
+            background: "#ffeb3b",
+            color: "#333",
+            border: "none",
+            borderRadius: 8,
+            padding: "7px 20px",
+            fontWeight: 600,
+            fontSize: "1.01rem",
+            marginLeft: 5,
+          }}
+        >
+          Save
+        </button>
+        <button
+          onClick={() => setEditingSupplier(false)}
+          style={{
+            background: "#f9f9f9",
+            color: "#444",
+            border: "1px solid #ddd",
+            borderRadius: 8,
+            padding: "7px 16px",
+            marginLeft: 3,
+            fontSize: "0.97rem",
+          }}
+        >
+          Cancel
+        </button>
+      </>
+    ) : (
+      <button
+        onClick={() => {
+          setInputSupplierName(supplierName || "");
+          setEditingSupplier(true);
+        }}
+        style={{
+          background: "#fffde7",
+          color: "#b89800",
+          border: "1px solid #ffeb3b",
+          borderRadius: 8,
+          padding: "7px 20px",
+          fontWeight: 600,
+          fontSize: "1.01rem",
+        }}
+      >
+        Edit Name
+      </button>
+    )}
   </div>
 )}
+
     {editingSupplier ? (
       <>
         <button
