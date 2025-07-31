@@ -16,7 +16,8 @@ const supabase = createClient(
 // --- CONSTANTS ---
 const botAvatar = process.env.PUBLIC_URL + "/bot-avatar.png";
 const userAvatar = process.env.PUBLIC_URL + "/user-avatar.png";
-const BACKEND_URL = "https://4d66d45e-0288-4203-935e-1c5d2a182bde-00-38ratc2twzear.pike.replit.dev";
+const GEMINI_API_URL =
+  process.env.REACT_APP_GEMINI_API_URL || "http://localhost:11434/api/generate";
 
 // --- QUESTIONS ---
 const questions = [
@@ -336,7 +337,7 @@ useEffect(() => {
 // --- Save answer to backend ---
 const saveAnswerToBackend = async (email, questionNumber, answer) => {
   try {
-    await fetch(`${BACKEND_URL}/api/save-answer`, {
+    await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/save-answer`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
        body: JSON.stringify({ email: user.email.trim().toLowerCase(), questionNumber, answer })
@@ -383,7 +384,7 @@ const saveAnswerToBackend = async (email, questionNumber, answer) => {
         setTyping(true);
         setTypingText("Generating assessment summary...");
         try {
-          const response = await fetch(`${BACKEND_URL}/api/session-summary`, {
+          const response = await fetch("http://localhost:8080/api/session-summary", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: user.email, sessionId }),
@@ -865,10 +866,65 @@ const [isDragActive, setIsDragActive] = useState(false);
 
 
   const handleUpload = async (e) => {
+<<<<<<< Updated upstream
   const file = e.target.files[0];
   if (!file) return;
   setUploading(true);
   setError("");
+=======
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    setError("");
+
+    // 1. Upload to Supabase
+    const filePath = `uploads/${sessionId}_${email}/question-${questionNumber}/requirement-${requirementIdx + 1}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("uploads").upload(filePath, file, { upsert: true });
+    if (uploadError) {
+      setUploading(false);
+      setError("Upload failed: " + uploadError.message);
+      return;
+    }
+
+    // 2. Send to Ollama for AI feedback
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("requirement", requirement);
+      formData.append("email", email);
+      formData.append("questionNumber", questionNumber);
+
+      const response = await fetch("http://localhost:8080/api/check-file", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error("AI review failed");
+      const data = await response.json();
+
+      // 3. Build bubble message (requirement + feedback)
+      const botBubble = 
+  `🧾 **Question ${questionNumber}, Requirement ${requirementIdx + 1}:**\n\n` +
+  `**Requirement:**\n${requirement}\n\n` +
+  `**AI Review:**\n${data.feedback || "No feedback received."}`;
+
+      setMessages(prev => [...prev, { from: "bot", text: botBubble }]);
+      setUploaded(true);
+setAccepted(false); // <== Add this so logic works
+setResults(prev => {
+  const updated = [...prev];
+  // Find the question's index in results (usually step, but pass as prop if needed)
+  updated[questionNumber - 1].requirements[requirementIdx] = {
+    aiScore: data.score || null,
+    aiFeedback: data.feedback || ""
+  };
+  return updated;
+});
+
+    } catch (err) {
+      setError("AI review failed: " + err.message);
+    }
+>>>>>>> Stashed changes
 
   // 1. Upload to Supabase
   const filePath = `uploads/${sessionId}_${email}/question-${questionNumber}/requirement-${requirementIdx + 1}-${file.name}`;
@@ -961,7 +1017,7 @@ const submitDisagreement = async () => {
       formData.append("file", disagreeFile);
     }
 
-    const res = await fetch(`${BACKEND_URL}/api/disagree-feedback`, {
+    const res = await fetch("http://localhost:8080/api/disagree-feedback", {
       method: "POST",
       body: formData,
     });
