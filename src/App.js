@@ -1,5 +1,3 @@
-how about my front end?
-
 import React, { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import ReactMarkdown from "react-markdown";
@@ -85,6 +83,11 @@ function HourglassLoader() {
 
 // =============== MAIN APP COMPONENT ===============
 export default function App() {
+  const [showSupplierNameModal, setShowSupplierNameModal] = useState(false);
+const [inputSupplierName, setInputSupplierName] = useState("");
+const [supplierNameSaveSuccess, setSupplierNameSaveSuccess] = useState(false);
+// For retry logic after correction:
+const [pendingUpload, setPendingUpload] = useState(null); // holds info if an upload failed due to name mismatch
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [typingText, setTypingText] = useState("");
@@ -446,6 +449,82 @@ if (!user) {
 
   // --- RENDER ---
   return (
+    <>
+    {supplierNameSaveSuccess && (
+  <div style={{
+    position: "fixed", top: 30, right: 30, background: "#157A4A",
+    color: "#fff", padding: "13px 22px", borderRadius: 9, zIndex: 2000,
+    fontWeight: 600, boxShadow: "0 2px 12px #0003"
+  }}>
+    ✅ Company name updated!
+  </div>
+)}
+{showSupplierNameModal && (
+  <div style={{
+    position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
+    background: "rgba(0,0,0,0.27)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999
+  }}>
+    <div style={{
+      background: "#fff",
+      borderRadius: 14,
+      padding: "30px 40px",
+      boxShadow: "0 4px 32px #0004",
+      minWidth: 340,
+      display: "flex", flexDirection: "column", gap: 18,
+      alignItems: "center"
+    }}>
+      <div style={{ fontWeight: 700, fontSize: "1.18rem", marginBottom: 8 }}>
+        Confirm Your Company Name
+      </div>
+      <input
+        value={inputSupplierName}
+        onChange={e => setInputSupplierName(e.target.value)}
+        style={{
+          fontSize: "1.07rem", padding: "8px 18px", borderRadius: 7,
+          border: "1.5px solid #0085CA", width: 220, marginBottom: 10
+        }}
+      />
+      <div style={{ display: "flex", gap: 10 }}>
+        <button
+          onClick={async () => {
+            if (!user?.email || !inputSupplierName.trim()) return;
+            const res = await fetch(`${BACKEND_URL}/api/set-supplier-name`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email: user.email, supplierName: inputSupplierName }),
+            });
+            const data = await res.json();
+            if (data.success) {
+              setSupplierName(data.supplierName);
+              setSupplierNameSaveSuccess(true);
+              setShowSupplierNameModal(false);
+              setTimeout(() => setSupplierNameSaveSuccess(false), 2200);
+              setPendingUpload(null);
+            } else {
+              alert("Failed to update company name.");
+            }
+          }}
+          style={{
+            background: "#0085CA", color: "#fff", border: "none",
+            borderRadius: 8, padding: "8px 22px", fontWeight: 600, fontSize: "1.07rem"
+          }}>
+          Save
+        </button>
+        <button
+          onClick={() => {
+            setShowSupplierNameModal(false);
+            setPendingUpload(null);
+          }}
+          style={{
+            background: "#f5f5f5", color: "#666", border: "none",
+            borderRadius: 8, padding: "8px 22px", fontWeight: 500, fontSize: "1.01rem"
+          }}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     <div
       style={{
         maxWidth: 700,
@@ -795,6 +874,11 @@ if (!user) {
   setDisagreeLoading={setDisagreeLoading}
   results={results}
   setResults={setResults}
+  onCompanyNameMismatch={({ detectedCompanyName, file, requirement, questionNumber, requirementIdx }) => {
+    setShowSupplierNameModal(true);
+    setInputSupplierName(detectedCompanyName || "");
+    setPendingUpload({ file, requirement, questionNumber, requirementIdx });
+  }}
 />
 
       )}
@@ -823,10 +907,15 @@ if (!user) {
           </div>
         )}
     </div>
+    </>
   );
-}
+
+
+
+
 
 // --- UPLOAD SECTION ---
+
 function UploadSection({
   question,
   requirementIdx,
@@ -896,6 +985,24 @@ const [isDragActive, setIsDragActive] = useState(false);
 
     if (!response.ok) throw new Error("AI review failed");
     const data = await response.json();
+
+// Handle company name mismatch / confirmation prompt from backend
+if (data.requireCompanyNameConfirmation) {
+  // Pass up to App for handling modal and possible retry
+  if (typeof window !== "undefined" && window.setShowSupplierNameModal) {
+    // for global ref (optional, see step 4)
+    window.setShowSupplierNameModal(true);
+    window.setInputSupplierName(data.detectedCompanyName || "");
+  }
+  if (typeof window !== "undefined" && window.setPendingUpload) {
+    window.setPendingUpload({
+      file, requirement, email, questionNumber, requirementIdx
+    });
+  }
+  setError("Company name needs confirmation/correction.");
+  setUploading(false);
+  return;
+}
 
     // 3. Build bubble message (requirement + feedback)
     const botBubble = 
