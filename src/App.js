@@ -84,10 +84,8 @@ function HourglassLoader() {
 // =============== MAIN APP COMPONENT ===============
 export default function App() {
   const [showSupplierNameModal, setShowSupplierNameModal] = useState(false);
-const [inputSupplierName, setInputSupplierName] = useState("");
-const [supplierNameSaveSuccess, setSupplierNameSaveSuccess] = useState(false);
-// For retry logic after correction:
-const [pendingUpload, setPendingUpload] = useState(null); // holds info if an upload failed due to name mismatch
+  const [supplierNameSaveSuccess, setSupplierNameSaveSuccess] = useState(false);
+  const [pendingUpload, setPendingUpload] = useState(null); // holds info if an upload failed due to name mismatch
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [typingText, setTypingText] = useState("");
