@@ -709,8 +709,7 @@ if (!user) {
           </div>
         )}
     </div>
-    </>
-  );
+    );
 
 
 
@@ -1307,4 +1306,5 @@ function ReviewCard({ answers, questions, onRevise, onContinue }) {
       </div>
     </div>
   );
+}
 }
