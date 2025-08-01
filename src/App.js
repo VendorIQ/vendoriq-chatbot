@@ -117,7 +117,25 @@ export default function App() {
       }))
     }))
   );
-
+async function fetchSummary() {
+        setTyping(true);
+        setTypingText("Generating assessment summary...");
+        try {
+          const response = await fetch(`${BACKEND_URL}/api/session-summary`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: user.email, sessionId }),
+          });
+          const result = await response.json();
+          setSummary(result.feedback || "No summary found.");
+          setScore(result.score || null);
+          setReportBreakdown(result.detailedScores || []);
+        } catch (err) {
+          setSummary("Failed to generate summary. Please contact support.");
+        }
+        setTyping(false);
+        setTypingText("");
+      }
 function ProgressPopup({ results, questions, onJump, onClose }) {
   return (
     <div style={{
@@ -346,30 +364,10 @@ const saveAnswerToBackend = async (email, questionNumber, answer) => {
 
   // --- Show summary when done ---
   useEffect(() => {
-    if (showSummary && step >= questions.length) {
-      async function fetchSummary() {
-        setTyping(true);
-        setTypingText("Generating assessment summary...");
-        try {
-          const response = await fetch(`${BACKEND_URL}/api/session-summary`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: user.email, sessionId }),
-          });
-          const result = await response.json();
-          setSummary(result.feedback || "No summary found.");
-          setScore(result.score || null);
-          setReportBreakdown(result.detailedScores || []);
-        } catch (err) {
-          setSummary("Failed to generate summary. Please contact support.");
-        }
-        setTyping(false);
-        setTypingText("");
-      }
-      fetchSummary();
+    if (showSummary && step >= questions.length && user?.email) {
+     fetchSummary();
     }
-    // eslint-disable-next-line
-  }, [showSummary]);
+     }, [showSummary, user]);
 
   // --- Handle answer ---
   const handleAnswer = (answer) => {
@@ -588,9 +586,17 @@ if (!user) {
       {showSummary && (
   <FinalReportCard
     questions={questions}
-    breakdown={reportBreakdown}  // <-- use the backend data
+    breakdown={reportBreakdown}
     summary={summary}
     score={score}
+	onRetry={() => {
+      // Re-trigger the summary fetch
+      setSummary("");
+      setTyping(true);
+      setTypingText("Regenerating summary...");
+      // Your summary-fetch logic here (see below)
+      fetchSummary();
+    }}
   />
 )}
 
@@ -745,7 +751,7 @@ function UploadSection({
   const [accepted, setAccepted] = useState(false);
 const [isDragActive, setIsDragActive] = useState(false);
 const [ocrLang, setOcrLang] = useState("eng");
-
+const [lastFile, setLastFile] = useState(null);
 
 // *** ADD THIS useEffect ***
 useEffect(() => {
@@ -769,6 +775,7 @@ useEffect(() => {
 
   const handleUpload = async (e) => {
   const file = e.target.files[0];
+  setLastFile(file);
   if (!file) return;
   setUploading(true);
   setError("");
@@ -1159,11 +1166,36 @@ return (
       </div>
     )}
     {uploading && <HourglassLoader />}
-    {error && <div style={{ color: "red", marginTop: 12 }}>{error}</div>}
+    {error && (
+  <div style={{ color: "red", marginTop: 12 }}>
+    {error}
+    {error.includes("AI review failed") && lastFile && (
+      <button
+        onClick={() => handleUpload({ target: { files: [lastFile] } })}
+        disabled={uploading}
+		style={{
+          marginLeft: 14,
+          background: "#0085CA",
+          color: "#fff",
+          border: "none",
+          borderRadius: 7,
+          padding: "7px 18px",
+          fontWeight: 600,
+          fontSize: "1.01rem",
+          cursor: uploading ? "not-allowed" : "pointer",
+          opacity: uploading ? 0.6 : 1,
+        }}
+      >
+        Retry AI Review
+      </button>
+    )}
+  </div>
+)}
+
   </div>
 );
 }
-function FinalReportCard({ questions, breakdown, summary, score }) {
+function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
   return (
     <div
       style={{
@@ -1224,6 +1256,24 @@ function FinalReportCard({ questions, breakdown, summary, score }) {
         <strong>Summary & Recommendations:</strong>
         <br />
         <ReactMarkdown>{summary}</ReactMarkdown>
+		 {summary?.includes("Failed to generate summary") && onRetry && (
+          <button
+            onClick={onRetry}
+            style={{
+              marginTop: 14,
+              background: "#0085CA",
+              color: "#fff",
+              border: "none",
+              borderRadius: 7,
+              padding: "8px 20px",
+              fontSize: "1.08rem",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+			>
+			Retry Final Summary
+			</button>
+}}
       </div>
     </div>
   );
