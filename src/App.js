@@ -742,6 +742,7 @@ function UploadSection({
   const [error, setError] = useState("");
   const [accepted, setAccepted] = useState(false);
 const [isDragActive, setIsDragActive] = useState(false);
+const [ocrLang, setOcrLang] = useState("eng");
 
 // *** ADD THIS useEffect ***
 useEffect(() => {
@@ -786,6 +787,7 @@ useEffect(() => {
     formData.append("email", email);
     formData.append("questionNumber", questionNumber);
     formData.append("companyName", companyName);
+    formData.append("ocrLang", ocrLang); // <-- ADD THIS LINE
     const response = await fetch(`${BACKEND_URL}/api/check-file`, {
       method: "POST",
       body: formData,
@@ -1086,6 +1088,30 @@ return (
           }}
         >
         </div>
+        <div style={{ marginBottom: 10 }}>
+  <label htmlFor="ocr-lang" style={{ marginRight: 8, fontWeight: 500, color: "#0085CA" }}>
+    Select language for document text:
+  </label>
+  <select
+    id="ocr-lang"
+    value={ocrLang}
+    onChange={e => setOcrLang(e.target.value)}
+    style={{
+      border: "1.5px solid #b3d6f8",
+      borderRadius: 7,
+      padding: "3px 12px",
+      fontSize: "1rem",
+      color: "#333",
+    }}
+  >
+    <option value="eng">English</option>
+    <option value="ind">Bahasa Indonesia</option>
+    <option value="vie">Vietnamese</option>
+    <option value="tha">Thai</option>
+    {/* Add more as needed */}
+  </select>
+</div>
+
         <label className="browse-btn" style={{ marginTop: 12 }}>
           📁 Browse File
           <input
