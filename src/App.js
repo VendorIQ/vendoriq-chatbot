@@ -832,7 +832,7 @@ const handleAccept = () => {
   if (requirementIdx < question.requirements.length - 1) {
     setUploadReqIdx(requirementIdx + 1);    // Move to next requirement
     setUploaded(false);                     // Reset upload for new requirement
-    setAccepted(false);                     // Reset accept state
+    setAccepted(false);                    
     // Do NOT hide the uploads section
   } else {
     // All requirements done, move to next question
