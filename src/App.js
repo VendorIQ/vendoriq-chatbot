@@ -894,235 +894,227 @@ return (
   <div>
     {/* Disagree Modal is rendered globally so it's always available */}
     {showDisagreeModal && (
-  <div
-    style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      width: "100vw",
-      height: "100vh",
-      background: "rgba(0,0,0,0.4)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 999,
-    }}
-  >
-    <form
-      onSubmit={e => {
-        e.preventDefault();
-        if (!disagreeReason.trim()) return;
-        submitDisagreement();
-      }}
-      style={{
-        background: "#fff",
-        borderRadius: 18,
-        padding: "30px 32px 24px 32px",
-        maxWidth: 420,
-        width: "92%",
-        boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 16,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
-        <span style={{ fontSize: 26, color: "#d32f2f", marginRight: 10 }}>❓</span>
-        <span style={{ fontWeight: 700, fontSize: "1.14rem", color: "#d32f2f" }}>
-          Disagree with AI Feedback
-        </span>
-      </div>
-      <label htmlFor="disagree-reason" style={{ fontWeight: 500, marginBottom: 2 }}>
-        Your reason or argument <span style={{ color: "#d32f2f" }}>*</span>
-      </label>
-      <textarea
-        id="disagree-reason"
-        placeholder="Clearly state your reason for disagreement, with facts or references if possible..."
-        value={disagreeReason}
-        onChange={e => setDisagreeReason(e.target.value)}
+      <div
         style={{
-          width: "95%",
-          minHeight: 80,
-          resize: "vertical",
-          fontSize: "1rem",
-          padding: "10px",
-          borderRadius: 7,
-          border: "1.5px solid #e0e0e0",
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          background: "rgba(0,0,0,0.4)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 999,
         }}
-        required
-      />
-      <label
-  htmlFor="disagree-file"
-  style={{
-    display: "inline-block",
-    background: "#e3f2fd",
-    color: "#333",
-    fontWeight: 500,
-    borderRadius: 7,
-    padding: "8px 22px",
-    cursor: "pointer",
-    boxShadow: "0 1px 4px #0001",
-    transition: "background 0.2s",
-    border: "1.5px solid #e0e0e0",
-    marginTop: 2,
-    marginBottom: 4,
-  }}
->
-  📁 Upload File
-  <input
-    id="disagree-file"
-    type="file"
-    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
-    onChange={e => setDisagreeFile(e.target.files[0])}
-    style={{ display: "none" }}
-  />
-</label>
-<span style={{ marginLeft: 8, color: "#777", fontSize: "0.97rem" }}>
-  {disagreeFile ? disagreeFile.name : "No file chosen"}
-</span>
-
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 }}>
-        <button
-          type="button"
-          onClick={() => setShowDisagreeModal(false)}
-          style={{
-            background: "#f5f5f5",
-            color: "#666",
-            border: "none",
-            borderRadius: 8,
-            padding: "8px 22px",
-            fontSize: "1.01rem",
-            fontWeight: 500,
-            cursor: "pointer",
+      >
+        <form
+          onSubmit={e => {
+            e.preventDefault();
+            if (!disagreeReason.trim()) return;
+            submitDisagreement();
           }}
-          disabled={disagreeLoading}
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
           style={{
-            background: "#d32f2f",
-            color: "#fff",
-            border: "none",
-            borderRadius: 8,
-            padding: "8px 22px",
-            fontSize: "1.01rem",
-            fontWeight: 600,
-            cursor: "pointer",
+            background: "#fff",
+            borderRadius: 18,
+            padding: "30px 32px 24px 32px",
+            maxWidth: 420,
+            width: "92%",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
           }}
-          disabled={disagreeLoading || !disagreeReason.trim()}
         >
-          {disagreeLoading ? "Submitting..." : "Submit"}
-        </button>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+            <span style={{ fontSize: 26, color: "#d32f2f", marginRight: 10 }}>❓</span>
+            <span style={{ fontWeight: 700, fontSize: "1.14rem", color: "#d32f2f" }}>
+              Disagree with AI Feedback
+            </span>
+          </div>
+          <label htmlFor="disagree-reason" style={{ fontWeight: 500, marginBottom: 2 }}>
+            Your reason or argument <span style={{ color: "#d32f2f" }}>*</span>
+          </label>
+          <textarea
+            id="disagree-reason"
+            placeholder="Clearly state your reason for disagreement, with facts or references if possible..."
+            value={disagreeReason}
+            onChange={e => setDisagreeReason(e.target.value)}
+            style={{
+              width: "95%",
+              minHeight: 80,
+              resize: "vertical",
+              fontSize: "1rem",
+              padding: "10px",
+              borderRadius: 7,
+              border: "1.5px solid #e0e0e0",
+            }}
+            required
+          />
+          <label
+            htmlFor="disagree-file"
+            style={{
+              display: "inline-block",
+              background: "#e3f2fd",
+              color: "#333",
+              fontWeight: 500,
+              borderRadius: 7,
+              padding: "8px 22px",
+              cursor: "pointer",
+              boxShadow: "0 1px 4px #0001",
+              transition: "background 0.2s",
+              border: "1.5px solid #e0e0e0",
+              marginTop: 2,
+              marginBottom: 4,
+            }}
+          >
+            📁 Upload File
+            <input
+              id="disagree-file"
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
+              onChange={e => setDisagreeFile(e.target.files[0])}
+              style={{ display: "none" }}
+            />
+          </label>
+          <span style={{ marginLeft: 8, color: "#777", fontSize: "0.97rem" }}>
+            {disagreeFile ? disagreeFile.name : "No file chosen"}
+          </span>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 }}>
+            <button
+              type="button"
+              onClick={() => setShowDisagreeModal(false)}
+              style={{
+                background: "#f5f5f5",
+                color: "#666",
+                border: "none",
+                borderRadius: 8,
+                padding: "8px 22px",
+                fontSize: "1.01rem",
+                fontWeight: 500,
+                cursor: "pointer",
+              }}
+              disabled={disagreeLoading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{
+                background: "#d32f2f",
+                color: "#fff",
+                border: "none",
+                borderRadius: 8,
+                padding: "8px 22px",
+                fontSize: "1.01rem",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+              disabled={disagreeLoading || !disagreeReason.trim()}
+            >
+              {disagreeLoading ? "Submitting..." : "Submit"}
+            </button>
+          </div>
+        </form>
       </div>
-    </form>
-  </div>
-)}
-
+    )}
 
     {/* Main upload UI */}
     {!uploaded && (
-  <>
-    <div
-  onDragOver={e => {
-    e.preventDefault();
-    setIsDragActive(true);
-  }}
-  onDragLeave={e => {
-    e.preventDefault();
-    setIsDragActive(false);
-  }}
-  onDrop={e => {
-    e.preventDefault();
-    setIsDragActive(false);
-    const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file) {
-      handleUpload({ target: { files: [file] } });
-    }
-  }}
-  style={{
-    border: isDragActive
-      ? "2.8px solid #229cf9"
-      : "2px dashed #b3d6f8",
-    background: isDragActive
-      ? "linear-gradient(108deg, #e4f4ff 70%, #daf0fc 100%)"
-      : "linear-gradient(108deg, #fafdff 60%, #f0f8ff 100%)",
-    borderRadius: 22,
-    padding: "20px 0 30px 0",
-    margin: "5px 0",
-    minHeight: 134,
-    maxWidth: 370,
-    textAlign: "center",
-    transition: "all 0.17s",
-    boxShadow: isDragActive
-      ? "0 4px 18px #229cf930"
-      : "0 2px 10px #b6d9fc30",
-    cursor: "pointer",
-    display: uploaded ? "none" : "block",
-    position: "relative",
-  }}
-    ><div
-    style={{
-      fontSize: "1.0rem",
-      fontWeight: 700,
-      color: "#0085CA",
-    }}
-  >
-    Requirement {requirementIdx + 1}: {requirement}
-  </div>
-      <div style={{ fontWeight: 600, 
-        color: "#999",
-        fontSize: "0.70rem",
-        marginTop: "10px",
-        marginBottom: "10px" }}>
-        {isDragActive
-          ? "Drop your file here..."
-          : "Drag & drop a file here, or click Browse File below"}
-      </div>
       <div
+        onDragOver={e => {
+          e.preventDefault();
+          setIsDragActive(true);
+        }}
+        onDragLeave={e => {
+          e.preventDefault();
+          setIsDragActive(false);
+        }}
+        onDrop={e => {
+          e.preventDefault();
+          setIsDragActive(false);
+          const file = e.dataTransfer.files && e.dataTransfer.files[0];
+          if (file) {
+            handleUpload({ target: { files: [file] } });
+          }
+        }}
         style={{
-          margin: "10px auto 0 auto",
-          color: "#0085CA",
-          fontSize: "0.97rem",
-          fontWeight: 400,
-          maxWidth: 400,
-          padding: "4px 0",
-          marginBottom: "40px",
+          border: isDragActive
+            ? "2.8px solid #229cf9"
+            : "2px dashed #b3d6f8",
+          background: isDragActive
+            ? "linear-gradient(108deg, #e4f4ff 70%, #daf0fc 100%)"
+            : "linear-gradient(108deg, #fafdff 60%, #f0f8ff 100%)",
+          borderRadius: 22,
+          padding: "20px 0 30px 0",
+          margin: "5px 0",
+          minHeight: 134,
+          maxWidth: 370,
+          textAlign: "center",
+          transition: "all 0.17s",
+          boxShadow: isDragActive
+            ? "0 4px 18px #229cf930"
+            : "0 2px 10px #b6d9fc30",
+          cursor: "pointer",
+          display: uploaded ? "none" : "block",
+          position: "relative",
         }}
       >
+        <div
+          style={{
+            fontSize: "1.0rem",
+            fontWeight: 700,
+            color: "#0085CA",
+          }}
+        >
+          Requirement {requirementIdx + 1}: {requirement}
+        </div>
+        <div style={{ fontWeight: 600, color: "#999", fontSize: "0.70rem", marginTop: "10px", marginBottom: "10px" }}>
+          {isDragActive
+            ? "Drop your file here..."
+            : "Drag & drop a file here, or click Browse File below"}
+        </div>
+        <div
+          style={{
+            margin: "10px auto 0 auto",
+            color: "#0085CA",
+            fontSize: "0.97rem",
+            fontWeight: 400,
+            maxWidth: 400,
+            padding: "4px 0",
+            marginBottom: "40px",
+          }}
+        >
+        </div>
+        <label className="browse-btn" style={{ marginTop: 12 }}>
+          📁 Browse File
+          <input
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
+            onChange={handleUpload}
+            disabled={uploading}
+            hidden
+          />
+        </label>
+        <button
+          className="skip-btn"
+          onClick={() => {
+            setResults(prev => {
+              const updated = [...prev];
+              updated[questionNumber - 1].requirements[requirementIdx] = {
+                aiScore: null,
+                aiFeedback: "Skipped"
+              };
+              return updated;
+            });
+            setUploaded(true);
+          }}
+          disabled={uploading}
+        >
+          ⏭️ Skip Requirement
+        </button>
       </div>
-  
-    <label className="browse-btn" style={{ marginTop: 12 }}>
-      📁 Browse File
-      <input
-        type="file"
-        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
-        onChange={handleUpload}
-        disabled={uploading}
-        hidden
-      />
-    </label>
-    <button
-      className="skip-btn"
-      onClick={() => {
-        setResults(prev => {
-          const updated = [...prev];
-          updated[questionNumber - 1].requirements[requirementIdx] = {
-            aiScore: null,
-            aiFeedback: "Skipped"
-          };
-          return updated;
-        });
-        setUploaded(true);
-      }}
-      disabled={uploading}
-    >
-      ⏭️ Skip Requirement
-    </button>
-    </div>
-  </>
-)}
+    )}
 
     {uploaded && !accepted && (
       <div className="button-group">
