@@ -1273,7 +1273,7 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
 			>
 			Retry Final Summary
 			</button>
-}}
+        }
       </div>
     </div>
   );
