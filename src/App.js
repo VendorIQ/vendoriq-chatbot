@@ -83,9 +83,6 @@ function HourglassLoader() {
 
 // =============== MAIN APP COMPONENT ===============
 export default function App() {
-  const [showSupplierNameModal, setShowSupplierNameModal] = useState(false);
-  const [supplierNameSaveSuccess, setSupplierNameSaveSuccess] = useState(false);
-  const [pendingUpload, setPendingUpload] = useState(null); // holds info if an upload failed due to name mismatch
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [typingText, setTypingText] = useState("");
@@ -101,33 +98,27 @@ export default function App() {
   const [answers, setAnswers] = useState([]);
   const [reviewMode, setReviewMode] = useState(false);
   const chatEndRef = useRef(null);
-const [supplierNameLoading, setSupplierNameLoading] = useState(false);
-const [supplierName, setSupplierName] = useState("");   // holds detected or manually set company name
-const [editingSupplier, setEditingSupplier] = useState(false);
-const [inputSupplierName, setInputSupplierName] = useState("");
-const [disagreeMode, setDisagreeMode] = useState(false);
-const [disagreeFeedback, setDisagreeFeedback] = useState("");
-const [disagreeLoading, setDisagreeLoading] = useState(false);
-const [disagreeHistory, setDisagreeHistory] = useState([]);
-const [showDisagreeModal, setShowDisagreeModal] = useState(false);
-const [disagreeReason, setDisagreeReason] = useState("");
-const [disagreeFile, setDisagreeFile] = useState(null);
-const [user, setUser] = useState(null);
-const [showProgress, setShowProgress] = useState(false);
-const [profile, setProfile] = useState(null);
-const [results, setResults] = useState(
-  questions.map(q => ({
-    answer: null,
-    questionScore: null,   // (optional, for future)
-    requirements: q.requirements.map(() => ({
-      aiScore: null,       // store AI score if available
-      aiFeedback: ""       // store AI feedback
+  const [companyName, setCompanyName] = useState("");
+  const [disagreeMode, setDisagreeMode] = useState(false);
+  const [disagreeFeedback, setDisagreeFeedback] = useState("");
+  const [disagreeLoading, setDisagreeLoading] = useState(false);
+  const [disagreeHistory, setDisagreeHistory] = useState([]);
+  const [showDisagreeModal, setShowDisagreeModal] = useState(false);
+  const [disagreeReason, setDisagreeReason] = useState("");
+  const [disagreeFile, setDisagreeFile] = useState(null);
+  const [user, setUser] = useState(null);
+  const [showProgress, setShowProgress] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [results, setResults] = useState(
+    questions.map(q => ({
+      answer: null,
+      questionScore: null,   // (optional, for future)
+      requirements: q.requirements.map(() => ({
+        aiScore: null,       // store AI score if available
+        aiFeedback: ""       // store AI feedback
+      }))
     }))
-  }))
-);
-window.setShowSupplierNameModal = setShowSupplierNameModal;
-window.setInputSupplierName = setInputSupplierName;
-window.setPendingUpload = setPendingUpload;
+  );
 
 function ProgressPopup({ results, questions, onJump, onClose }) {
   return (
@@ -206,52 +197,6 @@ function ProgressPopup({ results, questions, onJump, onClose }) {
     </div>
   );
 }
-// Fetch current supplier name for this user
-const fetchSupplierName = async () => {
-  if (!user?.email) return;
-  setSupplierNameLoading(true);
-  try {
-    const res = await fetch(`${BACKEND_URL}/api/get-supplier-name?email=${user.email}`);
-    const data = await res.json();
-    setSupplierName(data.supplierName || "");
-  } catch {
-    setSupplierName("(not found)");
-  }
-  setSupplierNameLoading(false);
-};
-
-useEffect(() => {
-  if (user) fetchSupplierName();
-  // eslint-disable-next-line
-}, [user]);
-
-// Save edited supplier name
-const saveSupplierName = async () => {
-  if (!user?.email || !inputSupplierName.trim()) return;
-  const res = await fetch(`${BACKEND_URL}/api/set-supplier-name`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: user.email, supplierName: inputSupplierName }),
-  });
-  const data = await res.json();
-  if (data.success) {
-    setSupplierName(data.supplierName);
-    setEditingSupplier(false);
-  } else {
-    alert("Failed to update company name.");
-  }
-};
-// Retry the pending upload after company name is set
-const retryPendingUpload = async () => {
-  if (!pendingUpload) return;
-  // Find the UploadSection via a ref or state and call its handleUpload with the stored file
-  // For now, a simple way: create a temporary input, call handleUpload directly if you expose it, or set a flag to trigger upload in UploadSection.
-  // Example using window event:
-  const uploadEvent = new CustomEvent("vendorIQ:retryUpload", { detail: pendingUpload });
-  window.dispatchEvent(uploadEvent);
-  setPendingUpload(null);
-};
-
 
 useEffect(() => {
   // Get current session on load
@@ -464,88 +409,21 @@ const saveAnswerToBackend = async (email, questionNumber, answer) => {
 };
 
 if (!user) {
-  return <AuthPage onAuth={setUser} />;
+  return (
+    <AuthPage
+      onAuth={(userObj, company) => {
+        setUser(userObj);
+        setCompanyName(company);
+      }}
+    />
+  );
 }
+
 
   // --- RENDER ---
   return (
     <>
-    {supplierNameSaveSuccess && (
-  <div style={{
-    position: "fixed", top: 30, right: 30, background: "#157A4A",
-    color: "#fff", padding: "13px 22px", borderRadius: 9, zIndex: 2000,
-    fontWeight: 600, boxShadow: "0 2px 12px #0003"
-  }}>
-    ✅ Company name updated!
-  </div>
-)}
-{showSupplierNameModal && (
-  <div style={{
-    position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh",
-    background: "rgba(0,0,0,0.27)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999
-  }}>
-    <div style={{
-      background: "#fff",
-      borderRadius: 14,
-      padding: "30px 40px",
-      boxShadow: "0 4px 32px #0004",
-      minWidth: 340,
-      display: "flex", flexDirection: "column", gap: 18,
-      alignItems: "center"
-    }}>
-      <div style={{ fontWeight: 700, fontSize: "1.18rem", marginBottom: 8 }}>
-        Confirm Your Company Name
-      </div>
-      <input
-        value={inputSupplierName}
-        onChange={e => setInputSupplierName(e.target.value)}
-        style={{
-          fontSize: "1.07rem", padding: "8px 18px", borderRadius: 7,
-          border: "1.5px solid #0085CA", width: 220, marginBottom: 10
-        }}
-      />
-      <div style={{ display: "flex", gap: 10 }}>
-        <button
-          onClick={async () => {
-            if (!user?.email || !inputSupplierName.trim()) return;
-            const res = await fetch(`${BACKEND_URL}/api/set-supplier-name`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email: user.email, supplierName: inputSupplierName }),
-            });
-            const data = await res.json();
-            if (data.success) {
-              setSupplierName(data.supplierName);
-              setSupplierNameSaveSuccess(true);
-              setShowSupplierNameModal(false);
-              setTimeout(() => setSupplierNameSaveSuccess(false), 2200);
-              retryPendingUpload(); // <--- add this
-            } else {
-              alert("Failed to update company name.");
-            }
-          }}
-          style={{
-            background: "#0085CA", color: "#fff", border: "none",
-            borderRadius: 8, padding: "8px 22px", fontWeight: 600, fontSize: "1.07rem"
-          }}>
-          Save
-        </button>
-        <button
-          onClick={() => {
-            setShowSupplierNameModal(false);
-            setPendingUpload(null);
-          }}
-          style={{
-            background: "#f5f5f5", color: "#666", border: "none",
-            borderRadius: 8, padding: "8px 22px", fontWeight: 500, fontSize: "1.01rem"
-          }}>
-          Cancel
-        </button>
-      </div>
-    </div>
-  </div>
-)}
-    <div
+    {    <div
       style={{
         maxWidth: 700,
         margin: "0px auto",
@@ -618,97 +496,7 @@ if (!user) {
   <strong style={{ fontSize: "1.18rem", marginTop: 2 }}>VendorIQ Chatbot</strong>
 </nav>
 
-{/* --- Supplier Name Display and Correction --- */}
-{step === 0 && !showUploads && (
-  <div
-    style={{
-      background: "#fffde7",
-      border: "1.5px solid #ffeb3b",
-      borderRadius: 10,
-      padding: "14px 24px",
-      margin: "18px 0 4px 0",
-      display: "flex",
-      alignItems: "center",
-      gap: 18,
-      fontSize: "1.11rem",
-    }}
-  >
-    <div>
-      <b>Detected Company Name:</b>{" "}
-      {editingSupplier ? (
-        <input
-          type="text"
-          value={inputSupplierName}
-          onChange={e => setInputSupplierName(e.target.value)}
-          style={{
-            padding: "6px 12px",
-            fontSize: "1.03rem",
-            borderRadius: 6,
-            border: "1.5px solid #ddd",
-            minWidth: 180,
-          }}
-        />
-      ) : supplierNameLoading ? (
-        <span style={{ color: "#229cf9", fontStyle: "italic", marginLeft: 8 }}>
-          <span role="img" aria-label="hourglass">⏳</span> Loading...
-        </span>
-      ) : (
-        <span style={{ color: "#d8a900" }}>{supplierName || "(not found yet)"}</span>
-      )}
-    </div>
-    {editingSupplier ? (
-      <>
-        <button
-          onClick={saveSupplierName}
-          style={{
-            background: "#ffeb3b",
-            color: "#333",
-            border: "none",
-            borderRadius: 8,
-            padding: "7px 20px",
-            fontWeight: 600,
-            fontSize: "1.01rem",
-            marginLeft: 5,
-          }}
-        >
-          Save
-        </button>
-        <button
-          onClick={() => setEditingSupplier(false)}
-          style={{
-            background: "#f9f9f9",
-            color: "#444",
-            border: "1px solid #ddd",
-            borderRadius: 8,
-            padding: "7px 16px",
-            marginLeft: 3,
-            fontSize: "0.97rem",
-          }}
-        >
-          Cancel
-        </button>
-      </>
-    ) : (
-      <button
-        onClick={() => {
-          setInputSupplierName(supplierName || "");
-          setEditingSupplier(true);
-        }}
-        style={{
-          background: "#fffde7",
-          color: "#b89800",
-          border: "1px solid #ffeb3b",
-          borderRadius: 8,
-          padding: "7px 20px",
-          fontWeight: 600,
-          fontSize: "1.01rem",
-        }}
-      >
-        Edit Name
-      </button>
-    )}
-  </div>
-)}
+
     
 {showProgress && (
   <ProgressPopup
@@ -876,6 +664,7 @@ if (!user) {
   email={user.email}
   sessionId={sessionId}
   questionNumber={questions[step].number}
+  companyName={companyName}     // <-- Add this!
   setMessages={setMessages}
   setShowUploads={setShowUploads}
   setUploadReqIdx={setUploadReqIdx}
@@ -883,7 +672,6 @@ if (!user) {
   setReviewMode={setReviewMode}
   setStep={setStep}
   setJustAnswered={setJustAnswered}
-  fetchSupplierName={fetchSupplierName}
   showDisagreeModal={showDisagreeModal} //added
   setShowDisagreeModal={setShowDisagreeModal}
   disagreeReason={disagreeReason}
@@ -894,11 +682,6 @@ if (!user) {
   setDisagreeLoading={setDisagreeLoading}
   results={results}
   setResults={setResults}
-  onCompanyNameMismatch={({ detectedCompanyName, file, requirement, questionNumber, requirementIdx }) => {
-    setShowSupplierNameModal(true);
-    setInputSupplierName(detectedCompanyName || "");
-    setPendingUpload({ file, requirement, questionNumber, requirementIdx });
-  }}
 />
 
       )}
@@ -1016,7 +799,7 @@ useEffect(() => {
     formData.append("requirement", requirement);
     formData.append("email", email);
     formData.append("questionNumber", questionNumber);
-
+    formData.append("companyName", companyName);
     const response = await fetch(`${BACKEND_URL}/api/check-file`, {
       method: "POST",
       body: formData,
@@ -1027,17 +810,6 @@ useEffect(() => {
 
 // Handle company name mismatch / confirmation prompt from backend
 if (data.requireCompanyNameConfirmation) {
-  // Pass up to App for handling modal and possible retry
-  if (typeof window !== "undefined" && window.setShowSupplierNameModal) {
-    // for global ref (optional, see step 4)
-    window.setShowSupplierNameModal(true);
-    window.setInputSupplierName(data.detectedCompanyName || "");
-  }
-  if (typeof window !== "undefined" && window.setPendingUpload) {
-    window.setPendingUpload({
-      file, requirement, email, questionNumber, requirementIdx
-    });
-  }
   setError("Company name needs confirmation/correction.");
   setUploading(false);
   return;
@@ -1063,10 +835,7 @@ if (data.requireCompanyNameConfirmation) {
       return updated;
     });
 
-    // --- PATCH: Refresh company name after uploading to Q1R1 ---
-    if (questionNumber === 1 && fetchSupplierName) {
-      fetchSupplierName();
-    }
+
 
   } catch (err) {
     setError("AI review failed: " + err.message);

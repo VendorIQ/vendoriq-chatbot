@@ -49,6 +49,13 @@ export default function AuthPage({ onAuth }) {
         }
       }
       onAuth(data.user, companyName);
+      // Save company name immediately after auth (to supplier_names table)
+await fetch(`${process.env.REACT_APP_BACKEND_URL || "https://vendoriq-backend.onrender.com"}/api/set-supplier-name`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email: data.user.email, supplierName: companyName }),
+});
+
     }
   };
 
