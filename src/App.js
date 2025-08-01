@@ -125,6 +125,9 @@ const [results, setResults] = useState(
     }))
   }))
 );
+window.setShowSupplierNameModal = setShowSupplierNameModal;
+window.setInputSupplierName = setInputSupplierName;
+window.setPendingUpload = setPendingUpload;
 
 function ProgressPopup({ results, questions, onJump, onClose }) {
   return (
