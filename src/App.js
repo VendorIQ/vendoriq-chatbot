@@ -422,8 +422,7 @@ if (!user) {
 
   // --- RENDER ---
   return (
-    <>
-    {    <div
+    <div
       style={{
         maxWidth: 700,
         margin: "0px auto",
@@ -731,6 +730,7 @@ function UploadSection({
   setShowUploads,
   setUploadReqIdx,
   reviewMode,
+  companyName,
   setReviewMode,
   setStep,
   setJustAnswered,
@@ -807,14 +807,6 @@ useEffect(() => {
 
     if (!response.ok) throw new Error("AI review failed");
     const data = await response.json();
-
-// Handle company name mismatch / confirmation prompt from backend
-if (data.requireCompanyNameConfirmation) {
-  setError("Company name needs confirmation/correction.");
-  setUploading(false);
-  return;
-}
-
     // 3. Build bubble message (requirement + feedback)
     const botBubble = 
       `🧾 **Question ${questionNumber}, Requirement ${requirementIdx + 1}:**\n\n` +
@@ -1315,5 +1307,4 @@ function ReviewCard({ answers, questions, onRevise, onContinue }) {
       </div>
     </div>
   );
-}
 }
