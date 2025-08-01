@@ -83,6 +83,7 @@ function HourglassLoader() {
 
 // =============== MAIN APP COMPONENT ===============
 export default function App() {
+  const [reportBreakdown, setReportBreakdown] = useState([]); // NEW
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [typingText, setTypingText] = useState("");
@@ -358,6 +359,7 @@ const saveAnswerToBackend = async (email, questionNumber, answer) => {
           const result = await response.json();
           setSummary(result.feedback || "No summary found.");
           setScore(result.score || null);
+          setReportBreakdown(result.detailedScores || []);
         } catch (err) {
           setSummary("Failed to generate summary. Please contact support.");
         }
@@ -586,7 +588,7 @@ if (!user) {
       {showSummary && (
   <FinalReportCard
     questions={questions}
-    results={results}   // <-- your per-question/requirement tracking array
+    breakdown={reportBreakdown}  // <-- use the backend data
     summary={summary}
     score={score}
   />
@@ -743,6 +745,7 @@ function UploadSection({
   const [accepted, setAccepted] = useState(false);
 const [isDragActive, setIsDragActive] = useState(false);
 const [ocrLang, setOcrLang] = useState("eng");
+
 
 // *** ADD THIS useEffect ***
 useEffect(() => {
@@ -1160,7 +1163,7 @@ return (
   </div>
 );
 }
-function FinalReportCard({ questions, results, summary, score }) {
+function FinalReportCard({ questions, breakdown, summary, score }) {
   return (
     <div
       style={{
@@ -1190,31 +1193,20 @@ function FinalReportCard({ questions, results, summary, score }) {
           </tr>
         </thead>
         <tbody>
-          {questions.map((q, idx) =>
-            (results[idx]?.answer === "Yes"
-              ? q.requirements.map((r, ridx) => (
-                <tr key={`${idx}-${ridx}`}>
-                  <td style={{ border: "1px solid #eee" }}>{q.number}</td>
-                  <td style={{ border: "1px solid #eee" }}>{q.text.slice(0, 32)}...</td>
-                  <td style={{ border: "1px solid #eee" }}>{results[idx].answer}</td>
-                  <td style={{ border: "1px solid #eee" }}>{`R${ridx + 1}: ${r.slice(0, 20)}...`}</td>
-                  <td style={{ border: "1px solid #eee" }}>{results[idx].requirements?.[ridx]?.aiScore ?? "-"}</td>
-                  <td style={{ border: "1px solid #eee" }}>{results[idx].requirements?.[ridx]?.aiFeedback?.slice(0, 32) ?? "-"}</td>
-                </tr>
-              ))
-              : (
-                <tr key={idx}>
-                  <td style={{ border: "1px solid #eee" }}>{q.number}</td>
-                  <td style={{ border: "1px solid #eee" }}>{q.text.slice(0, 32)}...</td>
-                  <td style={{ border: "1px solid #eee" }}>{results[idx]?.answer ?? "-"}</td>
-                  <td style={{ border: "1px solid #eee" }}>-</td>
-                  <td style={{ border: "1px solid #eee" }}>-</td>
-                  <td style={{ border: "1px solid #eee" }}>-</td>
-                </tr>
-              )
-            )
-          )}
-        </tbody>
+  {breakdown.map((row, idx) => (
+    <tr key={idx}>
+      <td>{row.questionNumber}</td>
+      <td>{questions[idx]?.text.slice(0, 32)}...</td>
+      <td>{row.answer}</td>
+      <td>
+        {(row.requirementScores && row.requirementScores.length > 0)
+          ? row.requirementScores.map((s, j) => <span key={j}>{s}/5 </span>)
+          : "-"}
+      </td>
+      <td>{row.upload_feedback ? row.upload_feedback.slice(0, 42) : "-"}</td>
+    </tr>
+  ))}
+</tbody>
       </table>
 
       <div
