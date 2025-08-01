@@ -125,6 +125,7 @@ const [results, setResults] = useState(
     }))
   }))
 );
+
 function ProgressPopup({ results, questions, onJump, onClose }) {
   return (
     <div style={{
@@ -237,6 +238,16 @@ const saveSupplierName = async () => {
     alert("Failed to update company name.");
   }
 };
+// Retry the pending upload after company name is set
+const retryPendingUpload = async () => {
+  if (!pendingUpload) return;
+  // Find the UploadSection via a ref or state and call its handleUpload with the stored file
+  // For now, a simple way: create a temporary input, call handleUpload directly if you expose it, or set a flag to trigger upload in UploadSection.
+  // Example using window event:
+  const uploadEvent = new CustomEvent("vendorIQ:retryUpload", { detail: pendingUpload });
+  window.dispatchEvent(uploadEvent);
+  setPendingUpload(null);
+};
 
 
 useEffect(() => {
@@ -245,6 +256,8 @@ useEffect(() => {
     if (session?.user) setUser(session.user);
   });
 }, []);
+
+
 
 useEffect(() => {
     // If user just logged in and there are no messages, show intro
@@ -258,7 +271,13 @@ useEffect(() => {
     }
     // eslint-disable-next-line
   }, [user]);
-
+  useEffect(() => {
+    if (user && !sessionId) {
+      setSessionId(user.id); // Or use a UUID if you want a new session each time
+    }
+    // eslint-disable-next-line
+  }, [user]);
+  
   useEffect(() => {
     if (user) {
       supabase
@@ -497,7 +516,7 @@ if (!user) {
               setSupplierNameSaveSuccess(true);
               setShowSupplierNameModal(false);
               setTimeout(() => setSupplierNameSaveSuccess(false), 2200);
-              setPendingUpload(null);
+              retryPendingUpload(); // <--- add this
             } else {
               alert("Failed to update company name.");
             }
@@ -952,6 +971,25 @@ function UploadSection({
 const [showDisagree, setShowDisagree] = useState(false);
 const [isDragActive, setIsDragActive] = useState(false);
 
+// *** ADD THIS useEffect ***
+useEffect(() => {
+  function onRetryUpload(e) {
+    const pending = e.detail;
+    // Make sure requirement context matches to avoid cross-upload bugs
+    if (
+      pending &&
+      pending.file &&
+      pending.email === email &&
+      pending.questionNumber === questionNumber &&
+      requirement === pending.requirement
+    ) {
+      // Retry the failed upload with the stored file
+      handleUpload({ target: { files: [pending.file] } });
+    }
+  }
+  window.addEventListener("vendorIQ:retryUpload", onRetryUpload);
+  return () => window.removeEventListener("vendorIQ:retryUpload", onRetryUpload);
+}, [email, questionNumber, requirement]); // dependencies must match current upload context
 
   const handleUpload = async (e) => {
   const file = e.target.files[0];
