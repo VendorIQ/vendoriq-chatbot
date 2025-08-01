@@ -16,7 +16,7 @@ const supabase = createClient(
 // --- CONSTANTS ---
 const botAvatar = process.env.PUBLIC_URL + "/bot-avatar.png";
 const userAvatar = process.env.PUBLIC_URL + "/user-avatar.png";
-const BACKEND_URL = "https://vendoriq-backend.onrender.com";
+const BACKEND_URL = "https://4d66d45e-0288-4203-935e-1c5d2a182bde-00-38ratc2twzear.pike.replit.dev";
 
 // --- QUESTIONS ---
 const questions = [
