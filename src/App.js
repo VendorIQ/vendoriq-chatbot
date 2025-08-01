@@ -1283,36 +1283,41 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
         fontSize: "1.22rem",
         color: "#0085CA",
       }}>
-        🎉 Thank you for completing the VendorIQ Assessment! 🎉
-        <div style={{margin: "20px 0", display: "flex", justifyContent: "center"}}>
-          <svg width="70" height="70" viewBox="0 0 70 70" style={{margin: "0 8px"}}>
+                🎉 Thank you for completing the VendorIQ Assessment! 🎉
+        <div style={{ margin: "20px 0", display: "flex", justifyContent: "center" }}>
+          {/* Yellow Firework */}
+          <svg width="70" height="70" viewBox="0 0 70 70" style={{ margin: "0 8px" }}>
             <g stroke="#ffcc00" strokeWidth="4">
-              <line x1="35" y1="5" x2="35" y2="25"/>
-              <line x1="35" y1="45" x2="35" y2="65"/>
-              <line x1="5" y1="35" x2="25" y2="35"/>
-              <line x1="45" y1="35" x2="65" y2="35"/>
-              <line x1="15" y1="15" x2="28" y2="28"/>
-              <line x1="42" y1="42" x2="55" y2="55"/>
-              <line x1="15" y1="55" x2="28" y2="42"/>
-              <line x1="42" y1="28" x2="55" y2="15"/>
+              <line x1="35" y1="5" x2="35" y2="25" />
+              <line x1="35" y1="45" x2="35" y2="65" />
+              <line x1="5" y1="35" x2="25" y2="35" />
+              <line x1="45" y1="35" x2="65" y2="35" />
+              <line x1="15" y1="15" x2="28" y2="28" />
+              <line x1="42" y1="42" x2="55" y2="55" />
+              <line x1="15" y1="55" x2="28" y2="42" />
+              <line x1="42" y1="28" x2="55" y2="15" />
             </g>
           </svg>
-          <svg width="70" height="70" viewBox="0 0 70 70" style={{margin: "0 8px"}}>
+          {/* Blue Firework */}
+          <svg width="70" height="70" viewBox="0 0 70 70" style={{ margin: "0 8px" }}>
             <g stroke="#38bdf8" strokeWidth="4">
-              <line x1="35" y1="5" x2="35" y2="25"/>
-              <line x1="35" y1="45" x2="35" y2="65"/>
-              <line x1="5" y1="35" x2="25" y2="35"/>
-              <line x1="45" y1="35" x2="65" y2="35"/>
-              <line x1="15" y1="15" x2="28" y2="28"/>
-              <line x1="42" y1="42" x2="55" y2="55"/>
-              <line x1="15" y1="55" x2="28" y2="42"/>
-              <line x1="42" y1="28" x2="55" y2="15"/>
+              <line x1="35" y1="5" x2="35" y2="25" />
+              <line x1="35" y1="45" x2="35" y2="65" />
+              <line x1="5" y1="35" x2="25" y2="35" />
+              <line x1="45" y1="35" x2="65" y2="35" />
+              <line x1="15" y1="15" x2="28" y2="28" />
+              <line x1="42" y1="42" x2="55" y2="55" />
+              <line x1="15" y1="55" x2="28" y2="42" />
+              <line x1="42" y1="28" x2="55" y2="15" />
             </g>
           </svg>
         </div>
+      </div>
     </div>
   );
 }
+
+export default FinalReportCard;
 // --- REVIEW CARD ---
 function ReviewCard({ answers, questions, onRevise, onContinue }) {
   return (
