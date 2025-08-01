@@ -1307,4 +1307,3 @@ function ReviewCard({ answers, questions, onRevise, onContinue }) {
     </div>
   );
 }
-}
