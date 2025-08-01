@@ -704,8 +704,8 @@ if (!user) {
           </div>
         )}
     </div>
-    );
-  }
+  );
+}
 
 // --- UPLOAD SECTION ---
 
