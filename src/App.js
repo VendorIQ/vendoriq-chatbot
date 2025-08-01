@@ -888,8 +888,7 @@ const submitDisagreement = async () => {
   }
 
   setDisagreeLoading(false);
-};
-
+}
 
 return (
   <div>
