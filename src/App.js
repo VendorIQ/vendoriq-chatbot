@@ -99,10 +99,7 @@ export default function App() {
   const [reviewMode, setReviewMode] = useState(false);
   const chatEndRef = useRef(null);
   const [companyName, setCompanyName] = useState("");
-  const [disagreeMode, setDisagreeMode] = useState(false);
-  const [disagreeFeedback, setDisagreeFeedback] = useState("");
   const [disagreeLoading, setDisagreeLoading] = useState(false);
-  const [disagreeHistory, setDisagreeHistory] = useState([]);
   const [showDisagreeModal, setShowDisagreeModal] = useState(false);
   const [disagreeReason, setDisagreeReason] = useState("");
   const [disagreeFile, setDisagreeFile] = useState(null);
@@ -494,8 +491,6 @@ if (!user) {
   </div>
   <strong style={{ fontSize: "1.18rem", marginTop: 2 }}>VendorIQ Chatbot</strong>
 </nav>
-
-
     
 {showProgress && (
   <ProgressPopup
@@ -712,9 +707,6 @@ if (!user) {
     );
   }
 
-
-
-
 // --- UPLOAD SECTION ---
 
 function UploadSection({
@@ -747,13 +739,8 @@ function UploadSection({
   const requirement = question.requirements[requirementIdx];
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(false);
-  const [showMissingReasonInput, setShowMissingReasonInput] = useState(false);
-  const [missingReason, setMissingReason] = useState("");
-  const [aiMissingFeedback, setAiMissingFeedback] = useState("");
-  const [showAcceptAsk, setShowAcceptAsk] = useState(false);
   const [error, setError] = useState("");
   const [accepted, setAccepted] = useState(false);
-const [showDisagree, setShowDisagree] = useState(false);
 const [isDragActive, setIsDragActive] = useState(false);
 
 // *** ADD THIS useEffect ***
