@@ -505,7 +505,8 @@ if (!user) {
         minHeight: "100vh",
       }}
     >
-style={{
+<nav
+  style={{
     background: "#222",
     color: "#fff",
     padding: "14px 20px",
@@ -560,6 +561,7 @@ style={{
     </button>
   </div>
 </nav>
+
     
 {showProgress && (
   <ProgressPopup
