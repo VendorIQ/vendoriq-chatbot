@@ -630,7 +630,7 @@ if (!user) {
       margin: "20px 0 0 0",
       padding: "0 8px 0",
       fontSize: "1.07rem",
-      color: "#bbb", // white text
+      color: "#383a42", // white text
       // add any other styles you want here
     }}
   >
