@@ -608,7 +608,7 @@ if (!user) {
         color: msg.from === "user" ? "#fff" : "#383a42",
         borderRadius: "16px",
         padding: msg.from === "user" ? "10px 32px" : 0,
-        fontSize: "1.08rem",
+        fontSize: "0.90rem",
         fontWeight: msg.from === "user" ? 600 : 400,
         minWidth: "60px",
         maxWidth: "340px",
@@ -630,7 +630,7 @@ if (!user) {
       margin: "20px 0 0 0",
       padding: "0 8px 0",
       fontSize: "1.07rem",
-      color: "#fff", // white text
+      color: "#bbb", // white text
       // add any other styles you want here
     }}
   >
