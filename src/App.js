@@ -566,6 +566,19 @@ if (!user) {
     </button>
   </div>
   <strong style={{ fontSize: "1.18rem", marginTop: 2 }}>VendorIQ Chatbot</strong>
+<img
+  src={botAvatar}
+  alt="Bot"
+  style={{
+    width: 44,
+    height: 44,
+    borderRadius: "50%",
+    background: "#fff",
+    boxShadow: "0 1px 8px #0002",
+    margin: "10px 0"
+  }}
+/>
+
 </nav>
     
 {showProgress && (
@@ -594,49 +607,28 @@ if (!user) {
         }}
       >
 	  {reviewMode && <AuditorReviewPanel />}
-        {messages.map((msg, idx) => {
-  // Case 1: message has text (normal messages)
-  if (msg.text && msg.text.trim().length > 0) {
+      {messages.map((msg, idx) => {
+  // User message (right, minimal box, no avatar)
+  if (msg.from === "user") {
     return (
       <div
         key={idx}
         style={{
           display: "flex",
-          flexDirection: msg.from === "bot" ? "row" : "row-reverse",
-          alignItems: "flex-start",
-          margin: "18px 0",
-          width: "100%",
-          justifyContent: msg.from === "bot" ? "flex-start" : "flex-end",
+          justifyContent: "flex-end",
+          margin: "10px 0"
         }}
       >
-        <img
-          src={msg.from === "bot" ? botAvatar : userAvatar}
-          alt={msg.from === "bot" ? "AI Bot" : "You"}
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: "50%",
-            background: "#fff",
-            margin: msg.from === "bot" ? "0 32px 0 14px" : "0 14px 0 32px",
-            boxShadow: "0 1px 8px #0002",
-            alignSelf: "flex-start",
-          }}
-        />
         <div
           style={{
-            background: msg.from === "bot" ? "#0085CA" : "#6D7B8D",
-            color: "#fff",
-            borderRadius: "18px",
-            padding: "1px 22px",
-            fontSize: "1.01rem",
+            background: "#eaecef",
+            color: "#222",
+            borderRadius: "16px",
+            padding: "8px 18px",
+            fontSize: "1.02rem",
+            maxWidth: "380px",
             fontFamily: "Inter, sans-serif",
-            boxShadow: "0 1px 6px #0001",
-            maxWidth: "440px",
-            minWidth: "64px",
-            textAlign: "left",
             wordBreak: "break-word",
-            marginLeft: msg.from === "bot" ? "0" : "auto",
-            marginRight: msg.from === "bot" ? "auto" : "0",
           }}
         >
           <ReactMarkdown>{msg.text}</ReactMarkdown>
@@ -644,63 +636,17 @@ if (!user) {
       </div>
     );
   }
-  // Case 2: bot is typing, last message, and is an (initially empty) bot message
-  if (
-    typing &&
-    idx === messages.length - 1 &&
-    msg.from === "bot"
-  ) {
+  // Bot message (left, plain, just margin)
+  if (msg.from === "bot") {
     return (
-      <div
-        key={idx}
-        style={{
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "flex-start",
-          margin: "18px 0",
-          width: "100%",
-          justifyContent: "flex-start",
-        }}
-      >
-        <img
-          src={botAvatar}
-          alt="AI Bot"
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: "50%",
-            background: "#fff",
-            margin: "0 32px 0 14px",
-            boxShadow: "0 1px 8px #0002",
-            alignSelf: "flex-start",
-          }}
-        />
-        <div
-          style={{
-            background: "#0085CA",
-            color: "#fff",
-            borderRadius: "18px",
-            padding: "1px 22px",
-            fontSize: "1.01rem",
-            fontFamily: "Inter, sans-serif",
-            boxShadow: "0 1px 6px #0001",
-            maxWidth: "440px",
-            minWidth: "64px",
-            textAlign: "left",
-            wordBreak: "break-word",
-            marginLeft: "0",
-            marginRight: "auto",
-          }}
-        >
-          {/* Show blinking cursor or | for typing */}
-          <span className="typing-cursor">|</span>
-        </div>
+      <div key={idx} style={{ textAlign: "left", margin: "20px 0 14px 0", fontSize: "1.07rem" }}>
+        <ReactMarkdown>{msg.text}</ReactMarkdown>
       </div>
     );
   }
-  // Otherwise, don't render
   return null;
 })}
+
 		
         <div ref={chatEndRef} />
       </div>
@@ -1349,6 +1295,30 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
         <strong>Summary & Recommendations:</strong>
         <br />
         <ReactMarkdown>{formatSummary(summary)}</ReactMarkdown>
+		<button
+  onClick={() => {
+    const el = document.createElement("a");
+    const file = new Blob([formatSummary(summary)], { type: "text/plain" });
+    el.href = URL.createObjectURL(file);
+    el.download = "vendoriq-compliance-summary.txt";
+    document.body.appendChild(el);
+    el.click();
+    setTimeout(() => document.body.removeChild(el), 100);
+  }}
+  style={{
+    marginTop: 18,
+    background: "#0085CA",
+    color: "#fff",
+    border: "none",
+    borderRadius: 7,
+    padding: "10px 22px",
+    fontSize: "1.07rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  }}
+>
+  ⬇️ Download Summary
+</button>
 		 {typeof summary === "string" && summary.includes("Failed to generate summary") && onRetry && (
           <button
             onClick={onRetry}

@@ -304,6 +304,14 @@ html {
   gap: 14px;
   margin-top: 14px;
 }
+@media (max-width: 700px) {
+  body, .chat-bubble, .summary-card, .final-summary, .progress-popup {
+    font-size: 0.98rem !important;
+  }
+  .final-summary h3, .summary-card h3 {
+    font-size: 1.1rem !important;
+  }
+}
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
