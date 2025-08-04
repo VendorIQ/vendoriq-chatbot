@@ -86,32 +86,39 @@ export default function App() {
   const [reportBreakdown, setReportBreakdown] = useState([]); // NEW
   const [bubblesComplete, setBubblesComplete] = useState(false); // <--- ADD THIS IF NOT DECLARED
 const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callback) => {
-  setBubblesComplete(false);  // <-- mark as not done
+  setTyping(true); // <--- Mark as typing at start
+  setBubblesComplete(false);
   let idx = 0;
   function sendNext() {
-    setTyping(true);
-    setTypingText("");
     let i = 0;
-    const msg = messagesArray[idx];
+    setMessages(prev => [...prev, { from, text: "" }]);
     const interval = setInterval(() => {
-      setTypingText(msg.slice(0, i + 1));
+      setMessages(prev => {
+        const newMsgs = [...prev];
+        newMsgs[newMsgs.length - 1] = {
+          ...newMsgs[newMsgs.length - 1],
+          text: messagesArray[idx].slice(0, i + 1)
+        };
+        return newMsgs;
+      });
       i++;
-      if (i >= msg.length) {
+      if (i >= messagesArray[idx].length) {
         clearInterval(interval);
         setTimeout(() => {
-          setMessages((prev) => [...prev, { from, text: msg }]);
-          setTyping(false);
-          setTypingText("");
           idx++;
           if (idx < messagesArray.length) {
             setTimeout(sendNext, delay);
           } else if (callback) {
             setTimeout(() => {
-              setBubblesComplete(true); // <-- mark as done!
+              setTyping(false); // <--- Typing finished!
+              setBubblesComplete(true);
               callback();
             }, delay);
           } else {
-            setTimeout(() => setBubblesComplete(true), delay); // <-- mark as done!
+            setTimeout(() => {
+              setTyping(false); // <--- Typing finished!
+              setBubblesComplete(true);
+            }, delay);
           }
         }, 350);
       }
@@ -119,7 +126,6 @@ const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callb
   }
   sendNext();
 };
-
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [typingText, setTypingText] = useState("");
@@ -163,9 +169,14 @@ async function fetchSummary() {
             body: JSON.stringify({ email: user.email, sessionId }),
           });
           const result = await response.json();
-          setSummary(result.feedback || "No summary found.");
-          setScore(result.score || null);
-          setReportBreakdown(result.detailedScores || []);
+		  
+		  console.log("Session summary API response:", result);
+          
+		  
+		  setSummary(result?.feedback ?? "No summary found.");
+		  setScore(result?.score ?? 0);
+          setReportBreakdown(result?.detailedScores ?? []);
+
         } catch (err) {
           setSummary("Failed to generate summary. Please contact support.");
         }
@@ -568,7 +579,10 @@ if (!user) {
                 marginRight: msg.from === "bot" ? "auto" : "0",
               }}
             >
-              <ReactMarkdown>{msg.text}</ReactMarkdown>
+              <ReactMarkdown>
+			  {msg.text}
+			   {(typing && idx === messages.length - 1 && msg.from === 'bot') ? '|' : ''}
+			  </ReactMarkdown>
             </div>
           </div>
         ))}
@@ -608,52 +622,7 @@ if (!user) {
   />
 )}
 
-      {/* TYPING */}
-      {typing && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            margin: "32px 0",
-            maxWidth: "100%",
-          }}
-        >
-          <img
-            src={botAvatar}
-            alt="AI Bot"
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: "50%",
-              background: "#fff",
-              marginRight: 14,
-              boxShadow: "0 1px 8px #0002",
-              alignSelf: "center",
-            }}
-          />
-          <div
-            style={{
-              background: "#0085CA",
-              color: "#fff",
-              borderRadius: "16px",
-              padding: "10px 20px",
-              minWidth: 48,
-              maxWidth: "70%",
-              fontSize: "1rem",
-              fontFamily: "Inter, sans-serif",
-              boxShadow: "0 1px 6px #0001",
-              position: "relative",
-              textAlign: "left",
-              wordBreak: "break-word",
-              fontStyle: "italic",
-            }}
-          >
-            {typingText}
-            <span className="typing-cursor">|</span>
-          </div>
-        </div>
-      )}
-
+          
       {/* UPLOAD SECTION */}
       {showUploads && step < questions.length && (
         <UploadSection
