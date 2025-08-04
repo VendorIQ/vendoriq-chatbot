@@ -588,72 +588,61 @@ if (!user) {
         }}
       >
 	  {reviewMode && <AuditorReviewPanel />}
-      {messages.map((msg, idx) => {
-  // User message (right, minimal box, no  avatar)
+{messages.map((msg, idx) => {
+  // User message: right-aligned orange chat bubble, white text
   if (msg.from === "user") {
     return (
       <div
-    key={idx}
-    style={{
-      display: "flex",
-      flexDirection: msg.from === "user" ? "row-reverse" : "row",
-      justifyContent: msg.from === "user" ? "flex-end" : "flex-start",
-      width: "100%",
-      margin: "18px 0",
-    }}
-  >
-    <div
-      style={{
-        background: msg.from === "user" ? "#FFA726" : "transparent",
-        color: msg.from === "user" ? "#fff" : "#383a42",
-        borderRadius: "16px",
-        padding: msg.from === "user" ? "10px 32px" : 0,
-        fontSize: "0.90rem",
-        fontWeight: msg.from === "user" ? 600 : 400,
-        minWidth: "60px",
-        maxWidth: "340px",
-        boxShadow: msg.from === "user" ? "0 1px 6px #FFA72660" : "none",
-        marginLeft: msg.from === "user" ? "auto" : 0,
-        marginRight: msg.from === "user" ? 0 : "auto",
-      }}
-    >
-      <ReactMarkdown>{msg.text}</ReactMarkdown>
-    </div>
-  </div>
-)}
-  // Bot message (left, plain, just margin)
+        key={idx}
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          width: "100%",
+          margin: "18px 0",
+        }}
+      >
+        <div
+          style={{
+            background: "#FFA726",
+            color: "#fff",
+            borderRadius: "18px",
+            padding: "10px 26px",
+            fontSize: "1.05rem",
+            fontWeight: 600,
+            minWidth: "60px",
+            maxWidth: "340px",
+            textAlign: "right",
+            boxShadow: "0 1px 6px #FFA72640",
+          }}
+        >
+          <ReactMarkdown>{msg.text}</ReactMarkdown>
+        </div>
+      </div>
+    );
+  }
+
+  // Bot message: plain, dark gray, no bubble
   if (msg.from === "bot") {
     return (
-     <div
-    key={idx}
-    style={{
-      margin: "20px 0 0 0",
-      padding: "0 8px 0",
-      fontSize: "1.07rem",
-      color: "#383a42", // white text
-      // add any other styles you want here
-    }}
-  >
-    <ReactMarkdown
-      components={{
-        p: ({ node, ...props }) => (
-          <p style={{ color: "#fff", margin: "10px 0" }} {...props} />
-        ),
-        li: ({ node, ...props }) => (
-          <li style={{ color: "#fff" }} {...props} />
-        ),
-        strong: ({ node, ...props }) => (
-          <strong style={{ color: "#fff" }} {...props} />
-        ),
-      }}
-    >
-      {msg.text}
-    </ReactMarkdown>
-  </div>
-);
-}
+      <div
+        key={idx}
+        style={{
+          margin: "18px 0 0 0",
+          padding: "0 8px 0",
+          fontSize: "1.07rem",
+          color: "#383a42", // dark GPT gray
+          lineHeight: 1.6,
+          maxWidth: 540,
+        }}
+      >
+        <ReactMarkdown>{msg.text}</ReactMarkdown>
+      </div>
+    );
+  }
+
   return null;
 })}
+
 
 		
         <div ref={chatEndRef} />
