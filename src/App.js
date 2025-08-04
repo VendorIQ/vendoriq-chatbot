@@ -501,13 +501,14 @@ if (!user) {
         margin: "0px auto",
 		paddingTop: 40,
         fontFamily: "Inter, sans-serif",
-        background: "#0079BE",
+        background: "#fff",   // White background
+        color: "#222",        // GPT-like gray for tex
         minHeight: "100vh",
       }}
     >
 <nav
   style={{
-    background: "#222",
+    background: "#222",      // dark navbar
     color: "#fff",
     padding: "14px 20px",
     borderRadius: 8,
@@ -515,52 +516,50 @@ if (!user) {
     fontSize: "1.1rem",
     display: "flex",
     alignItems: "center",
-    gap: 14,
+    gap: 18,
     justifyContent: "space-between"
   }}
 >
-  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
     <img
       src={botAvatar}
-      alt="VendorIQ"
+      alt="Bot"
       style={{
-        width: 46,
-        height: 46,
+        width: 44,
+        height: 44,
         borderRadius: "50%",
         background: "#fff",
-        marginRight: 10,
-        boxShadow: "0 1px 8px #0002",
+        marginRight: 12,
       }}
     />
-    <strong style={{ fontSize: "1.17rem", marginRight: 14 }}>
-      VendorIQ
-    </strong>
-  </div>
-  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-    <span style={{ color: "#b3e5fc", fontWeight: 500, fontSize: "1.04rem", marginRight: 4 }}>
-      {companyName && <>{companyName} &nbsp; | &nbsp;</>}
-      {user.email}
+    <span style={{ fontWeight: 700, fontSize: "1.18rem", color: "#fff" }}>
+      VendorIQ{companyName ? " | " + companyName : ""}
     </span>
-    <button
-      style={{
-        background: "#0085CA",
-        color: "#fff",
-        border: "none",
-        borderRadius: 7,
-        padding: "6px 18px",
-        fontSize: "0.98rem",
-        fontWeight: 500,
-        cursor: "pointer"
-      }}
-      onClick={async () => {
-        await supabase.auth.signOut();
-        setUser(null);
-      }}
-    >
-      Log Out
-    </button>
   </div>
+  <span style={{ color: "#fff", fontWeight: 400, fontSize: "0.95rem", marginLeft: "auto" }}>
+    {user.email}
+  </span>
+  <button
+    style={{
+      background: "#1976D2",
+      color: "#fff",
+      border: "none",
+      borderRadius: 7,
+      padding: "6px 18px",
+      fontSize: "0.98rem",
+      fontWeight: 500,
+      cursor: "pointer",
+      marginLeft: 18,
+    }}
+    onClick={async () => {
+      await supabase.auth.signOut();
+      setUser(null);
+    }}
+  >
+    Log Out
+  </button>
 </nav>
+
 
     
 {showProgress && (
@@ -594,38 +593,34 @@ if (!user) {
   if (msg.from === "user") {
     return (
       <div
-        key={idx}
-        style={{
-        margin: "18px 0 0 0",
-        alignSelf: "flex-end",
-        background: "#FFA000", // <--- orange like your browse file
-        color: "#fff",
-        borderRadius: "15px",
-        padding: "8px 20px",
-        fontWeight: 600,
-        fontSize: "1.06rem",
-        maxWidth: 340,
-        textAlign: "right",
-        boxShadow: "0 1px 6px #FFA00030"
+    key={idx}
+    style={{
+      display: "flex",
+      flexDirection: msg.from === "user" ? "row-reverse" : "row",
+      justifyContent: msg.from === "user" ? "flex-end" : "flex-start",
+      width: "100%",
+      margin: "18px 0",
+    }}
+  >
+    <div
+      style={{
+        background: msg.from === "user" ? "#FFA726" : "transparent",
+        color: msg.from === "user" ? "#fff" : "#383a42",
+        borderRadius: "16px",
+        padding: msg.from === "user" ? "10px 32px" : 0,
+        fontSize: "1.08rem",
+        fontWeight: msg.from === "user" ? 600 : 400,
+        minWidth: "60px",
+        maxWidth: "340px",
+        boxShadow: msg.from === "user" ? "0 1px 6px #FFA72660" : "none",
+        marginLeft: msg.from === "user" ? "auto" : 0,
+        marginRight: msg.from === "user" ? 0 : "auto",
       }}
-      >
-        <div
-          style={{
-            background: "#eaecef",
-            color: "#222",
-            borderRadius: "16px",
-            padding: "8px 18px",
-            fontSize: "1.02rem",
-            maxWidth: "380px",
-            fontFamily: "Inter, sans-serif",
-            wordBreak: "break-word",
-          }}
-        >
-          <ReactMarkdown>{msg.text}</ReactMarkdown>
-        </div>
-      </div>
-    );
-  }
+    >
+      <ReactMarkdown>{msg.text}</ReactMarkdown>
+    </div>
+  </div>
+)}
   // Bot message (left, plain, just margin)
   if (msg.from === "bot") {
     return (
