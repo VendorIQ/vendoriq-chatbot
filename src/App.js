@@ -501,7 +501,7 @@ if (!user) {
         margin: "0px auto",
 		paddingTop: 40,
         fontFamily: "Inter, sans-serif",
-        background: "#F7F8FA",
+        background: "linear-gradient(180deg, #B7E3FF 0%, #E3F3FF 100%)", 
         minHeight: "100vh",
       }}
     >
@@ -639,11 +639,42 @@ if (!user) {
   // Bot message (left, plain, just margin)
   if (msg.from === "bot") {
     return (
-      <div key={idx} style={{ textAlign: "left", margin: "20px 0 14px 0", fontSize: "1.07rem" }}>
-        <ReactMarkdown>{msg.text}</ReactMarkdown>
-      </div>
-    );
-  }
+    <div
+      key={idx}
+      style={{
+        background: "linear-gradient(108deg, #4FC3F7 70%, #81D4FA 100%)", // Soft sky blue
+        color: "#fff",
+        padding: "18px 20px",
+        borderRadius: "18px",
+        margin: "18px 0",
+        boxShadow: "0 2px 10px #81d4fa22",
+        fontSize: "1.09rem",
+        lineHeight: 1.7,
+        maxWidth: 630,
+        width: "auto",
+        alignSelf: "flex-start",
+        // Responsive for mobile (optional, can move to CSS)
+        ...(window.innerWidth < 650 ? { fontSize: "0.97rem", padding: "12px 10px" } : {}),
+      }}
+    >
+      <ReactMarkdown
+        components={{
+          p: ({ node, ...props }) => (
+            <p style={{ color: "#fff", margin: "10px 0" }} {...props} />
+          ),
+          li: ({ node, ...props }) => (
+            <li style={{ color: "#fff" }} {...props} />
+          ),
+          strong: ({ node, ...props }) => (
+            <strong style={{ color: "#fff" }} {...props} />
+          ),
+        }}
+      >
+        {msg.text}
+      </ReactMarkdown>
+    </div>
+  );
+}
   return null;
 })}
 
@@ -1071,7 +1102,7 @@ return (
     )}
 
     {/* Main upload UI */}
-    {!uploaded && (
+    {!uploaded && !uploading && (
       <div
         onDragOver={e => {
           e.preventDefault();

@@ -312,6 +312,20 @@ html {
     font-size: 1.1rem !important;
   }
 }
+@media (max-width: 600px) {
+  body,
+  .chat-main, .bot-message, .user-message {
+    font-size: 0.98rem !important;
+    line-height: 1.25 !important;
+  }
+  .FinalReportCard, .ReviewCard {
+    font-size: 1.01rem !important;
+  }
+  .answer-btn {
+    font-size: 0.97rem !important;
+    padding: 7px 10px !important;
+  }
+}
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
