@@ -173,7 +173,11 @@ async function fetchSummary() {
 		  console.log("Session summary API response:", result);
           
 		  
-		  setSummary(result?.feedback ?? "No summary found.");
+		  setSummary(
+  typeof result?.feedback === "string"
+    ? result.feedback
+    : JSON.stringify(result?.feedback) || "No summary found."
+);
 		  setScore(result?.score ?? 0);
           setReportBreakdown(result?.detailedScores ?? []);
 
@@ -1293,7 +1297,7 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
         <strong>Summary & Recommendations:</strong>
         <br />
         <ReactMarkdown>{summary}</ReactMarkdown>
-		 {summary?.includes("Failed to generate summary") && onRetry && (
+		 {typeof summary === "string" && summary.includes("Failed to generate summary") && onRetry && (
           <button
             onClick={onRetry}
             style={{
