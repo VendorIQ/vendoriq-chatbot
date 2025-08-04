@@ -84,6 +84,42 @@ function HourglassLoader() {
 // =============== MAIN APP COMPONENT ===============
 export default function App() {
   const [reportBreakdown, setReportBreakdown] = useState([]); // NEW
+  const [bubblesComplete, setBubblesComplete] = useState(false); // <--- ADD THIS IF NOT DECLARED
+const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callback) => {
+  setBubblesComplete(false);  // <-- mark as not done
+  let idx = 0;
+  function sendNext() {
+    setTyping(true);
+    setTypingText("");
+    let i = 0;
+    const msg = messagesArray[idx];
+    const interval = setInterval(() => {
+      setTypingText(msg.slice(0, i + 1));
+      i++;
+      if (i >= msg.length) {
+        clearInterval(interval);
+        setTimeout(() => {
+          setMessages((prev) => [...prev, { from, text: msg }]);
+          setTyping(false);
+          setTypingText("");
+          idx++;
+          if (idx < messagesArray.length) {
+            setTimeout(sendNext, delay);
+          } else if (callback) {
+            setTimeout(() => {
+              setBubblesComplete(true); // <-- mark as done!
+              callback();
+            }, delay);
+          } else {
+            setTimeout(() => setBubblesComplete(true), delay); // <-- mark as done!
+          }
+        }, 350);
+      }
+    }, 12);
+  }
+  sendNext();
+};
+
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [typingText, setTypingText] = useState("");
@@ -256,35 +292,7 @@ useEffect(() => {
   }, [user]);
   
 
-  // --- Animate chat bubbles ---
-  function sendBubblesSequentially(messagesArray, from = "bot", delay = 650, callback) {
-    let idx = 0;
-    function sendNext() {
-      setTyping(true);
-      setTypingText("");
-      let i = 0;
-      const msg = messagesArray[idx];
-      const interval = setInterval(() => {
-        setTypingText(msg.slice(0, i + 1));
-        i++;
-        if (i >= msg.length) {
-          clearInterval(interval);
-          setTimeout(() => {
-            setMessages((prev) => [...prev, { from, text: msg }]);
-            setTyping(false);
-            setTypingText("");
-            idx++;
-            if (idx < messagesArray.length) {
-              setTimeout(sendNext, delay);
-            } else if (callback) {
-              setTimeout(callback, delay);
-            }
-          }, 350);
-        }
-      }, 12);
-    }
-    sendNext();
-  }
+ 
 
   // --- Dialog logic ---
   function getBotMessage({ step, answer, justAnswered }) {
@@ -694,7 +702,8 @@ if (!user) {
         step >= 0 &&
         step < questions.length &&
         messages.length > 0 &&
-        !showIntro && (
+        !showIntro &&
+		bubblesComplete && (
           <div style={{ marginTop: 16 }}>
             <button
   onClick={() => handleAnswer("Yes")}
