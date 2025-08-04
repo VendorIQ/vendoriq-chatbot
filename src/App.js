@@ -629,34 +629,33 @@ if (!user) {
   // Bot message (left, plain, just margin)
   if (msg.from === "bot") {
     return (
-    <div
-      key={idx}
-      style={{
-        key={idx}
-        style={{
-        margin: "20px 0 0 0",
-        padding: "0 0 8px 0",
-        fontSize: "1.07rem",
-        color: "#fff" // white or near white, adjust later if needed{}),
+     <div
+    key={idx}
+    style={{
+      margin: "20px 0 0 0",
+      padding: "0 8px 0",
+      fontSize: "1.07rem",
+      color: "#fff", // white text
+      // add any other styles you want here
+    }}
+  >
+    <ReactMarkdown
+      components={{
+        p: ({ node, ...props }) => (
+          <p style={{ color: "#fff", margin: "10px 0" }} {...props} />
+        ),
+        li: ({ node, ...props }) => (
+          <li style={{ color: "#fff" }} {...props} />
+        ),
+        strong: ({ node, ...props }) => (
+          <strong style={{ color: "#fff" }} {...props} />
+        ),
       }}
     >
-      <ReactMarkdown
-        components={{
-          p: ({ node, ...props }) => (
-            <p style={{ color: "#fff", margin: "10px 0" }} {...props} />
-          ),
-          li: ({ node, ...props }) => (
-            <li style={{ color: "#fff" }} {...props} />
-          ),
-          strong: ({ node, ...props }) => (
-            <strong style={{ color: "#fff" }} {...props} />
-          ),
-        }}
-      >
-        {msg.text}
-      </ReactMarkdown>
-    </div>
-  );
+      {msg.text}
+    </ReactMarkdown>
+  </div>
+);
 }
   return null;
 })}
