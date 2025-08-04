@@ -126,6 +126,33 @@ const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callb
   }
   sendNext();
 };
+function formatSummary(summary) {
+  let obj = summary;
+  if (typeof summary === "string") {
+    try {
+      obj = JSON.parse(summary);
+    } catch {
+      // Not JSON, return as is
+      return summary;
+    }
+  }
+  if (obj && typeof obj === "object" && ("strengths" in obj || "weaknesses" in obj)) {
+    let str = "";
+    if (obj.strengths?.length) {
+      str += "**Strengths:**\n";
+      for (const s of obj.strengths) str += `- ${s}\n`;
+    }
+    if (obj.weaknesses?.length) {
+      str += (str ? "\n" : "") + "**Weaknesses:**\n";
+      for (const w of obj.weaknesses) str += `- ${w}\n`;
+    }
+    return str || JSON.stringify(obj, null, 2);
+  }
+  return typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+}
+
+
+
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [typingText, setTypingText] = useState("");
@@ -1296,7 +1323,7 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
       <div style={{ marginTop: 16, background: "#f8fafd", padding: "16px 10px", borderRadius: 7 }}>
         <strong>Summary & Recommendations:</strong>
         <br />
-        <ReactMarkdown>{summary}</ReactMarkdown>
+        <ReactMarkdown>{formatSummary(summary)}</ReactMarkdown>
 		 {typeof summary === "string" && summary.includes("Failed to generate summary") && onRetry && (
           <button
             onClick={onRetry}
