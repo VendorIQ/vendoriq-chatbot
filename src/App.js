@@ -1317,7 +1317,6 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
   );
 }
 
-export default FinalReportCard;
 // --- REVIEW CARD ---
 function ReviewCard({ answers, questions, onRevise, onContinue }) {
   return (
