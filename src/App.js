@@ -537,55 +537,114 @@ if (!user) {
         }}
       >
 	  {reviewMode && <AuditorReviewPanel />}
-        {messages.map((msg, idx) => (
-          <div
-            key={idx}
-            style={{
-              display: "flex",
-              flexDirection: msg.from === "bot" ? "row" : "row-reverse",
-              alignItems: "flex-start",
-              margin: "18px 0",
-              width: "100%",
-              justifyContent: msg.from === "bot" ? "flex-start" : "flex-end",
-            }}
-          >
-            <img
-              src={msg.from === "bot" ? botAvatar : userAvatar}
-              alt={msg.from === "bot" ? "AI Bot" : "You"}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: "50%",
-                background: "#fff",
-                margin: msg.from === "bot" ? "0 32px 0 14px" : "0 14px 0 32px",
-                boxShadow: "0 1px 8px #0002",
-                alignSelf: "flex-start",
-              }}
-            />
-            <div
-              style={{
-                background: msg.from === "bot" ? "#0085CA" : "#6D7B8D",
-                color: "#fff",
-                borderRadius: "18px",
-                padding: "1px 22px",
-                fontSize: "1.01rem",
-                fontFamily: "Inter, sans-serif",
-                boxShadow: "0 1px 6px #0001",
-                maxWidth: "440px",
-                minWidth: "64px",
-                textAlign: "left",
-                wordBreak: "break-word",
-                marginLeft: msg.from === "bot" ? "0" : "auto",
-                marginRight: msg.from === "bot" ? "auto" : "0",
-              }}
-            >
-              <ReactMarkdown>
-			  {msg.text}
-			   {(typing && idx === messages.length - 1 && msg.from === 'bot') ? '|' : ''}
-			  </ReactMarkdown>
-            </div>
-          </div>
-        ))}
+        {messages.map((msg, idx) => {
+  // Case 1: message has text (normal messages)
+  if (msg.text && msg.text.trim().length > 0) {
+    return (
+      <div
+        key={idx}
+        style={{
+          display: "flex",
+          flexDirection: msg.from === "bot" ? "row" : "row-reverse",
+          alignItems: "flex-start",
+          margin: "18px 0",
+          width: "100%",
+          justifyContent: msg.from === "bot" ? "flex-start" : "flex-end",
+        }}
+      >
+        <img
+          src={msg.from === "bot" ? botAvatar : userAvatar}
+          alt={msg.from === "bot" ? "AI Bot" : "You"}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: "50%",
+            background: "#fff",
+            margin: msg.from === "bot" ? "0 32px 0 14px" : "0 14px 0 32px",
+            boxShadow: "0 1px 8px #0002",
+            alignSelf: "flex-start",
+          }}
+        />
+        <div
+          style={{
+            background: msg.from === "bot" ? "#0085CA" : "#6D7B8D",
+            color: "#fff",
+            borderRadius: "18px",
+            padding: "1px 22px",
+            fontSize: "1.01rem",
+            fontFamily: "Inter, sans-serif",
+            boxShadow: "0 1px 6px #0001",
+            maxWidth: "440px",
+            minWidth: "64px",
+            textAlign: "left",
+            wordBreak: "break-word",
+            marginLeft: msg.from === "bot" ? "0" : "auto",
+            marginRight: msg.from === "bot" ? "auto" : "0",
+          }}
+        >
+          <ReactMarkdown>{msg.text}</ReactMarkdown>
+        </div>
+      </div>
+    );
+  }
+  // Case 2: bot is typing, last message, and is an (initially empty) bot message
+  if (
+    typing &&
+    idx === messages.length - 1 &&
+    msg.from === "bot"
+  ) {
+    return (
+      <div
+        key={idx}
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "flex-start",
+          margin: "18px 0",
+          width: "100%",
+          justifyContent: "flex-start",
+        }}
+      >
+        <img
+          src={botAvatar}
+          alt="AI Bot"
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: "50%",
+            background: "#fff",
+            margin: "0 32px 0 14px",
+            boxShadow: "0 1px 8px #0002",
+            alignSelf: "flex-start",
+          }}
+        />
+        <div
+          style={{
+            background: "#0085CA",
+            color: "#fff",
+            borderRadius: "18px",
+            padding: "1px 22px",
+            fontSize: "1.01rem",
+            fontFamily: "Inter, sans-serif",
+            boxShadow: "0 1px 6px #0001",
+            maxWidth: "440px",
+            minWidth: "64px",
+            textAlign: "left",
+            wordBreak: "break-word",
+            marginLeft: "0",
+            marginRight: "auto",
+          }}
+        >
+          {/* Show blinking cursor or | for typing */}
+          <span className="typing-cursor">|</span>
+        </div>
+      </div>
+    );
+  }
+  // Otherwise, don't render
+  return null;
+})}
+		
         <div ref={chatEndRef} />
       </div>
 
