@@ -589,7 +589,7 @@ if (!user) {
       >
 	  {reviewMode && <AuditorReviewPanel />}
       {messages.map((msg, idx) => {
-  // User message (right, minimal box, no avatar)
+  // User message (right, minimal box, no  avatar)
   if (msg.from === "user") {
     return (
       <div
