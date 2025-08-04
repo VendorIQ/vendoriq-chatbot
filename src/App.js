@@ -80,7 +80,31 @@ function HourglassLoader() {
     </div>
   );
 }
-
+function formatSummary(summary) {
+  let obj = summary;
+  if (typeof summary === "string") {
+    try {
+      obj = JSON.parse(summary);
+    } catch {
+      // Not JSON, return as is
+      return summary;
+    }
+  }
+  if (obj && typeof obj === "object" && ("strengths" in obj || "weaknesses" in obj)) {
+    let str = "";
+    if (obj.strengths?.length) {
+      str += "**Strengths:**\n";
+      for (const s of obj.strengths) str += `- ${s}\n`;
+    }
+    if (obj.weaknesses?.length) {
+      str += (str ? "\n" : "") + "**Weaknesses:**\n";
+      for (const w of obj.weaknesses) str += `- ${w}\n`;
+    }
+    return str || JSON.stringify(obj, null, 2);
+  }
+  return typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+}
+	  
 // =============== MAIN APP COMPONENT ===============
 export default function App() {
   const [reportBreakdown, setReportBreakdown] = useState([]); // NEW
@@ -214,31 +238,7 @@ async function fetchSummary() {
         setTyping(false);
         setTypingText("");
       }
-function formatSummary(summary) {
-  let obj = summary;
-  if (typeof summary === "string") {
-    try {
-      obj = JSON.parse(summary);
-    } catch {
-      // Not JSON, return as is
-      return summary;
-    }
-  }
-  if (obj && typeof obj === "object" && ("strengths" in obj || "weaknesses" in obj)) {
-    let str = "";
-    if (obj.strengths?.length) {
-      str += "**Strengths:**\n";
-      for (const s of obj.strengths) str += `- ${s}\n`;
-    }
-    if (obj.weaknesses?.length) {
-      str += (str ? "\n" : "") + "**Weaknesses:**\n";
-      for (const w of obj.weaknesses) str += `- ${w}\n`;
-    }
-    return str || JSON.stringify(obj, null, 2);
-  }
-  return typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
-}
-	  
+
 	  
 function ProgressPopup({ results, questions, onJump, onClose }) {
   return (
