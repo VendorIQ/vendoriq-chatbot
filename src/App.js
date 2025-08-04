@@ -501,48 +501,43 @@ if (!user) {
         margin: "0px auto",
 		paddingTop: 40,
         fontFamily: "Inter, sans-serif",
-        background: "linear-gradient(180deg, #B7E3FF 0%, #E3F3FF 100%)", 
+        background: "#0079BE",
         minHeight: "100vh",
       }}
     >
-<nav
-  style={{
-    background: "#333",
+style={{
+    background: "#222",
     color: "#fff",
     padding: "14px 20px",
     borderRadius: 8,
     marginBottom: 10,
     fontSize: "1.1rem",
     display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-start",
-    gap: 10,
-  }}
-  >
-  <div style={{ display: "flex", alignItems: "center", gap: 10, width: "100%" }}>
-  {profile && profile.role === 'auditor' && (
-  <button style={{ fontSize: "0.95rem" }} onClick={() => setReviewMode(!reviewMode)}>
-    {reviewMode ? "🔙 Exit Auditor Panel" : "🛠️ Auditor Review"}
-  </button>
-  )}
-<button
-  onClick={() => setShowProgress(v => !v)}
-  style={{
-    marginLeft: 8,
-    background: "#fff",
-    color: "#0085CA",
-    border: "1.5px solid #0085CA",
-    borderRadius: 7,
-    padding: "4px 16px",
-    fontWeight: 500,
-    fontSize: "0.97rem",
-    cursor: "pointer"
+    alignItems: "center",
+    gap: 14,
+    justifyContent: "space-between"
   }}
 >
-  {showProgress ? "Hide Progress" : "Show Progress"}
-</button>
-    <span style={{ flex: 1 }} />
-    <span style={{ color: "#dff", fontWeight: 400, fontSize: "0.95rem" }}>
+  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+    <img
+      src={botAvatar}
+      alt="VendorIQ"
+      style={{
+        width: 46,
+        height: 46,
+        borderRadius: "50%",
+        background: "#fff",
+        marginRight: 10,
+        boxShadow: "0 1px 8px #0002",
+      }}
+    />
+    <strong style={{ fontSize: "1.17rem", marginRight: 14 }}>
+      VendorIQ
+    </strong>
+  </div>
+  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <span style={{ color: "#b3e5fc", fontWeight: 500, fontSize: "1.04rem", marginRight: 4 }}>
+      {companyName && <>{companyName} &nbsp; | &nbsp;</>}
       {user.email}
     </span>
     <button
@@ -554,8 +549,7 @@ if (!user) {
         padding: "6px 18px",
         fontSize: "0.98rem",
         fontWeight: 500,
-        cursor: "pointer",
-        marginLeft: 8,
+        cursor: "pointer"
       }}
       onClick={async () => {
         await supabase.auth.signOut();
@@ -565,20 +559,6 @@ if (!user) {
       Log Out
     </button>
   </div>
-  <strong style={{ fontSize: "1.18rem", marginTop: 2 }}>VendorIQ Chatbot</strong>
-<img
-  src={botAvatar}
-  alt="Bot"
-  style={{
-    width: 44,
-    height: 44,
-    borderRadius: "50%",
-    background: "#fff",
-    boxShadow: "0 1px 8px #0002",
-    margin: "10px 0"
-  }}
-/>
-
 </nav>
     
 {showProgress && (
@@ -614,10 +594,18 @@ if (!user) {
       <div
         key={idx}
         style={{
-          display: "flex",
-          justifyContent: "flex-end",
-          margin: "10px 0"
-        }}
+        margin: "18px 0 0 0",
+        alignSelf: "flex-end",
+        background: "#FFA000", // <--- orange like your browse file
+        color: "#fff",
+        borderRadius: "15px",
+        padding: "8px 20px",
+        fontWeight: 600,
+        fontSize: "1.06rem",
+        maxWidth: 340,
+        textAlign: "right",
+        boxShadow: "0 1px 6px #FFA00030"
+      }}
       >
         <div
           style={{
@@ -642,19 +630,12 @@ if (!user) {
     <div
       key={idx}
       style={{
-        background: "linear-gradient(108deg, #4FC3F7 70%, #81D4FA 100%)", // Soft sky blue
-        color: "#fff",
-        padding: "18px 20px",
-        borderRadius: "18px",
-        margin: "18px 0",
-        boxShadow: "0 2px 10px #81d4fa22",
-        fontSize: "1.09rem",
-        lineHeight: 1.7,
-        maxWidth: 630,
-        width: "auto",
-        alignSelf: "flex-start",
-        // Responsive for mobile (optional, can move to CSS)
-        ...(window.innerWidth < 650 ? { fontSize: "0.97rem", padding: "12px 10px" } : {}),
+        key={idx}
+        style={{
+        margin: "20px 0 0 0",
+        padding: "0 0 8px 0",
+        fontSize: "1.07rem",
+        color: "#fff" // white or near white, adjust later if needed{}),
       }}
     >
       <ReactMarkdown
