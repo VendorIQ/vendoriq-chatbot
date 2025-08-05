@@ -296,21 +296,25 @@ function ProgressPopup({ results, questions, onJump, onClose }) {
                     }
                   }
                   return (
-                    <li
-                      key={ridx}
-                      style={{
-                        fontSize: "0.97rem",
-                        color,
-                        fontWeight: 600,
-                        marginBottom: 1,
-                        listStyle: "none"
-                      }}
-                    >
-                      Requirement {ridx + 1}: {status}
-                    </li>
-                  );
-                })}
-              </ul>
+      <li
+        key={ridx}
+        style={{
+          fontSize: "0.97rem",
+          color,
+          fontWeight: 600,
+          marginBottom: 1,
+          listStyle: "none",
+          cursor: "pointer", // add pointer
+          textDecoration: "underline dotted", // optional, to show it's clickable
+        }}
+        onClick={() => onJump(i, ridx)} // pass requirement index too!
+        title="Jump to this requirement"
+      >
+        Requirement {ridx + 1}: {status}
+      </li>
+    );
+  })}
+</ul>
             )}
           </li>
         ))}
@@ -581,18 +585,19 @@ if (!user) {
     
 {showProgress && (
   <ProgressPopup
-    results={results}
-    questions={questions}
-    onJump={idx => {
-      setStep(idx);
-      setShowSummary(false);
-      setReviewMode(false);
-      setMessages([]);
-      setShowUploads(false);
-      setShowProgress(false); // Hide the popup after jump
-    }}
-    onClose={() => setShowProgress(false)}
-  />
+  results={results}
+  questions={questions}
+  onJump={(qIdx, reqIdx) => {
+    setStep(qIdx);
+    setUploadReqIdx(reqIdx || 0);
+    setShowUploads(true);
+    setShowSummary(false);
+    setReviewMode(false);
+    setMessages([]);
+    setShowProgress(false); // Hide popup after jump
+  }}
+  onClose={() => setShowProgress(false)}
+/>
 )}
 
       {/* CHAT HISTORY */}
@@ -1336,39 +1341,40 @@ if (Array.isArray(summary) && summary.every(c => typeof c === "string" && c.leng
             </tr>
           </thead>
           <tbody>
-            {/* --- PER-REQUIREMENT ROWS --- */}
-            {breakdown.map((row, idx) =>
-              row.requirementScores && row.requirementScores.length > 0
-                ? row.requirementScores.map((scoreVal, reqIdx) => (
-                    <tr key={`${idx}-${reqIdx}`}>
-                      <td>{row.questionNumber}</td>
-                      <td>{questions[idx]?.text.slice(0, 32)}...</td>
-                      <td>{row.answer}</td>
-                      <td>
-                        {questions[idx]?.requirements[reqIdx]
-                          ? questions[idx].requirements[reqIdx].slice(0, 38) + "..."
-                          : "-"}
-                      </td>
-                      <td>{scoreVal != null ? `${scoreVal}/5` : "-"}</td>
-                      <td>
-                        {row.upload_feedback && Array.isArray(row.upload_feedback)
-                          ? (row.upload_feedback[reqIdx] || "-").slice(0, 48)
-                          : (row.upload_feedback || "-").slice(0, 48)}
-                      </td>
-                    </tr>
-                  ))
-                : (
-                  <tr key={idx}>
-                    <td>{row.questionNumber}</td>
-                    <td>{questions[idx]?.text.slice(0, 32)}...</td>
-                    <td>{row.answer}</td>
-                    <td>-</td>
-                    <td>-</td>
-                    <td>{typeof row.upload_feedback === "string" ? row.upload_feedback.slice(0, 48) : "-"}</td>
-                  </tr>
-                )
-            )}
-          </tbody>
+  {breakdown.map((row, qIdx) =>
+    (row.requirementScores && row.requirementScores.length > 0
+      ? row.requirementScores.map((scoreVal, reqIdx) => (
+          <tr key={`${qIdx}-${reqIdx}`}>
+            <td>{row.questionNumber}</td>
+            <td>{questions[qIdx]?.text.slice(0, 32)}...</td>
+            <td>{row.answer}</td>
+            <td>
+              {questions[qIdx]?.requirements[reqIdx]
+                ? questions[qIdx].requirements[reqIdx].slice(0, 38) + "..."
+                : "-"}
+            </td>
+            <td>{scoreVal != null ? `${scoreVal}/5` : "-"}</td>
+            <td>
+              {row.upload_feedback && Array.isArray(row.upload_feedback)
+                ? (row.upload_feedback[reqIdx] || "-").slice(0, 48)
+                : (row.upload_feedback || "-").slice(0, 48)}
+            </td>
+          </tr>
+        ))
+      : (
+        <tr key={qIdx}>
+          <td>{row.questionNumber}</td>
+          <td>{questions[qIdx]?.text.slice(0, 32)}...</td>
+          <td>{row.answer}</td>
+          <td>-</td>
+          <td>-</td>
+          <td>{typeof row.upload_feedback === "string" ? row.upload_feedback.slice(0, 48) : "-"}</td>
+        </tr>
+      )
+    )
+  )}
+</tbody>
+
         </table>
 
         <div
