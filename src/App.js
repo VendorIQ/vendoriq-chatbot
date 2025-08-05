@@ -765,6 +765,37 @@ if (!user) {
 
           </div>
         )}
+{!showProgress && (
+  <button
+    onClick={() => setShowProgress(true)}
+    style={{
+      position: "fixed",
+      bottom: 38,
+      right: 36,
+      zIndex: 1100,
+      background: "linear-gradient(108deg, #229cf9 70%, #35b3ff 100%)",
+      color: "#fff",
+      border: "none",
+      borderRadius: "50%",
+      width: 64,
+      height: 64,
+      boxShadow: "0 4px 24px #229cf970",
+      fontSize: "2.25rem",
+      fontWeight: 800,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      transition: "background 0.15s",
+      outline: "none",
+    }}
+    title="Show Progress"
+    aria-label="Show Progress"
+  >
+    📊
+  </button>
+)}
+		
     </div>
   );
 }
@@ -1205,37 +1236,7 @@ return (
         </button>
       </div>
     )}
-{/* Floating Progress FAB */}
-{!showProgress && (
-  <button
-    onClick={() => setShowProgress(true)}
-    style={{
-      position: "fixed",
-      bottom: 38,
-      right: 36,
-      zIndex: 1100,
-      background: "linear-gradient(108deg, #229cf9 70%, #35b3ff 100%)",
-      color: "#fff",
-      border: "none",
-      borderRadius: "50%",
-      width: 64,
-      height: 64,
-      boxShadow: "0 4px 24px #229cf970",
-      fontSize: "2.25rem",
-      fontWeight: 800,
-      cursor: "pointer",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      transition: "background 0.15s",
-      outline: "none",
-    }}
-    title="Show Progress"
-    aria-label="Show Progress"
-  >
-    📊
-  </button>
-)}
+
 
     {uploaded && !accepted && (
       <div className="button-group">
