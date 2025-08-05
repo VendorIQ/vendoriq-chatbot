@@ -627,8 +627,8 @@ if (!user) {
           style={{
             background: "#FFA726",
             color: "#fff",
-            borderRadius: "18px",
-            padding: "10px 26px",
+            borderRadius: "20px",
+            padding: "1px 26px",
             fontSize: "0.90rem",
             fontWeight: 600,
             minWidth: "20px",
