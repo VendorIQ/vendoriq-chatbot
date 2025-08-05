@@ -1232,7 +1232,25 @@ return (
   </div>
 );
 }
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+
 function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
+  // PDF Export Handler
+  const handlePdfExport = () => {
+    const input = document.getElementById("report-summary-download");
+    html2canvas(input, { scale: 2 }).then((canvas) => {
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "px",
+        format: [canvas.width, canvas.height],
+      });
+      pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
+      pdf.save("vendoriq-compliance-report.pdf");
+    });
+  };
+
   return (
     <div
       style={{
@@ -1247,107 +1265,146 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
         textAlign: "left",
       }}
     >
-      <h3 style={{ color: "#0085CA", marginTop: 0 }}>
-        <span role="img" aria-label="report">📝</span> Compliance Report Card
-      </h3>
-      <table style={{ width: "100%", marginBottom: 16, borderCollapse: "collapse", fontSize: "1rem" }}>
-        <thead>
-          <tr style={{ background: "#f1f7fa" }}>
-            <th style={{ padding: "6px", border: "1px solid #eee" }}>Q#</th>
-            <th style={{ padding: "6px", border: "1px solid #eee" }}>Question</th>
-            <th style={{ padding: "6px", border: "1px solid #eee" }}>Answer</th>
-            <th style={{ padding: "6px", border: "1px solid #eee" }}>Requirement</th>
-            <th style={{ padding: "6px", border: "1px solid #eee" }}>AI Score</th>
-            <th style={{ padding: "6px", border: "1px solid #eee" }}>Feedback</th>
-          </tr>
-        </thead>
-        <tbody>
-  {breakdown.map((row, idx) => (
-    <tr key={idx}>
-      <td>{row.questionNumber}</td>
-      <td>{questions[idx]?.text.slice(0, 32)}...</td>
-      <td>{row.answer}</td>
-      <td>
-        {(row.requirementScores && row.requirementScores.length > 0)
-          ? row.requirementScores.map((s, j) => <span key={j}>{s}/5 </span>)
-          : "-"}
-      </td>
-      <td>{row.upload_feedback ? row.upload_feedback.slice(0, 42) : "-"}</td>
-    </tr>
-  ))}
-</tbody>
-      </table>
+      {/* --- BEGIN: PDF Export Area --- */}
+      <div id="report-summary-download">
+        <h3 style={{ color: "#0085CA", marginTop: 0 }}>
+          <span role="img" aria-label="report">📝</span> Compliance Report Card
+        </h3>
+        <table style={{ width: "100%", marginBottom: 16, borderCollapse: "collapse", fontSize: "1rem" }}>
+          <thead>
+            <tr style={{ background: "#f1f7fa" }}>
+              <th style={{ padding: "6px", border: "1px solid #eee" }}>Q#</th>
+              <th style={{ padding: "6px", border: "1px solid #eee" }}>Question</th>
+              <th style={{ padding: "6px", border: "1px solid #eee" }}>Answer</th>
+              <th style={{ padding: "6px", border: "1px solid #eee" }}>Requirement</th>
+              <th style={{ padding: "6px", border: "1px solid #eee" }}>AI Score</th>
+              <th style={{ padding: "6px", border: "1px solid #eee" }}>Feedback</th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* --- PER-REQUIREMENT ROWS --- */}
+            {breakdown.map((row, idx) =>
+              row.requirementScores && row.requirementScores.length > 0
+                ? row.requirementScores.map((scoreVal, reqIdx) => (
+                    <tr key={`${idx}-${reqIdx}`}>
+                      <td>{row.questionNumber}</td>
+                      <td>{questions[idx]?.text.slice(0, 32)}...</td>
+                      <td>{row.answer}</td>
+                      <td>
+                        {questions[idx]?.requirements[reqIdx]
+                          ? questions[idx].requirements[reqIdx].slice(0, 38) + "..."
+                          : "-"}
+                      </td>
+                      <td>{scoreVal != null ? `${scoreVal}/5` : "-"}</td>
+                      <td>
+                        {row.upload_feedback && Array.isArray(row.upload_feedback)
+                          ? (row.upload_feedback[reqIdx] || "-").slice(0, 48)
+                          : (row.upload_feedback || "-").slice(0, 48)}
+                      </td>
+                    </tr>
+                  ))
+                : (
+                  <tr key={idx}>
+                    <td>{row.questionNumber}</td>
+                    <td>{questions[idx]?.text.slice(0, 32)}...</td>
+                    <td>{row.answer}</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>{typeof row.upload_feedback === "string" ? row.upload_feedback.slice(0, 48) : "-"}</td>
+                  </tr>
+                )
+            )}
+          </tbody>
+        </table>
 
-      <div
-        style={{
+        <div
+          style={{
+            fontWeight: 700,
+            fontSize: "1.22rem",
+            color: "#157A4A",
+            marginBottom: 8,
+          }}
+        >
+          Overall Score: {score ?? "-"} / 100
+        </div>
+
+        <div style={{ marginTop: 16, background: "#f8fafd", padding: "16px 10px", borderRadius: 7 }}>
+          <strong>Summary & Recommendations:</strong>
+          <br />
+          <ReactMarkdown>{formatSummary(summary)}</ReactMarkdown>
+        </div>
+        <div style={{
+          marginTop: 28,
+          textAlign: "center",
           fontWeight: 700,
           fontSize: "1.22rem",
-          color: "#157A4A",
-          marginBottom: 8,
-        }}
-      >
-        Overall Score: {score ?? "-"} / 100
+          color: "#0085CA",
+        }}>
+          🎉 Thank you for completing the VendorIQ Assessment! 🎉
+          <div style={{ margin: "20px 0", display: "flex", justifyContent: "center" }} />
+        </div>
       </div>
+      {/* --- END: PDF Export Area --- */}
 
-      <div style={{ marginTop: 16, background: "#f8fafd", padding: "16px 10px", borderRadius: 7 }}>
-        <strong>Summary & Recommendations:</strong>
-        <br />
-        <ReactMarkdown>{formatSummary(summary)}</ReactMarkdown>
-		<button
-  onClick={() => {
-    const el = document.createElement("a");
-    const file = new Blob([formatSummary(summary)], { type: "text/plain" });
-    el.href = URL.createObjectURL(file);
-    el.download = "vendoriq-compliance-summary.txt";
-    document.body.appendChild(el);
-    el.click();
-    setTimeout(() => document.body.removeChild(el), 100);
-  }}
-  style={{
-    marginTop: 18,
-    background: "#0085CA",
-    color: "#fff",
-    border: "none",
-    borderRadius: 7,
-    padding: "10px 22px",
-    fontSize: "1.07rem",
-    fontWeight: 600,
-    cursor: "pointer",
-  }}
->
-  ⬇️ Download Summary
-</button>
-		 {typeof summary === "string" && summary.includes("Failed to generate summary") && onRetry && (
-          <button
-            onClick={onRetry}
-            style={{
-              marginTop: 14,
-              background: "#0085CA",
-              color: "#fff",
-              border: "none",
-              borderRadius: 7,
-              padding: "8px 20px",
-              fontSize: "1.08rem",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
-			>
-			Retry Final Summary
-			</button>
-        )}
+      {/* --- Download Buttons --- */}
+      <div style={{ marginTop: 18, display: "flex", gap: 12 }}>
+        <button
+          onClick={handlePdfExport}
+          style={{
+            background: "#0085CA",
+            color: "#fff",
+            border: "none",
+            borderRadius: 7,
+            padding: "10px 22px",
+            fontSize: "1.07rem",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          ⬇️ Download PDF Report
+        </button>
+        <button
+          onClick={() => {
+            const el = document.createElement("a");
+            const file = new Blob([formatSummary(summary)], { type: "text/plain" });
+            el.href = URL.createObjectURL(file);
+            el.download = "vendoriq-compliance-summary.txt";
+            document.body.appendChild(el);
+            el.click();
+            setTimeout(() => document.body.removeChild(el), 100);
+          }}
+          style={{
+            background: "#229cf9",
+            color: "#fff",
+            border: "none",
+            borderRadius: 7,
+            padding: "10px 22px",
+            fontSize: "1.07rem",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          ⬇️ Download Summary (TXT)
+        </button>
       </div>
-	  {/* Add this block after summary/recommendations */}
-      <div style={{
-        marginTop: 28,
-        textAlign: "center",
-        fontWeight: 700,
-        fontSize: "1.22rem",
-        color: "#0085CA",
-      }}>
-                🎉 Thank you for completing the VendorIQ Assessment! 🎉
-        <div style={{ margin: "20px 0", display: "flex", justifyContent: "center" }}>
-          </div>
-      </div>
+      {typeof summary === "string" && summary.includes("Failed to generate summary") && onRetry && (
+        <button
+          onClick={onRetry}
+          style={{
+            marginTop: 14,
+            background: "#0085CA",
+            color: "#fff",
+            border: "none",
+            borderRadius: 7,
+            padding: "8px 20px",
+            fontSize: "1.08rem",
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Retry Final Summary
+        </button>
+      )}
     </div>
   );
 }
