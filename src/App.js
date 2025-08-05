@@ -626,14 +626,14 @@ if (!user) {
       <div
         key={idx}
         style={{
-		  maxWidth: 10,  
+		  maxWidth: 1000,  
           margin: "2px 0 0 0", //margin right
           padding: "0 0 20px", //
           fontSize: "0.9rem",
           color: "#383a42", // dark GPT gray
 		  background: "transparent",// No box, blends in with main background
         // you can add lineHeight or letterSpacing here if you want
-          lineHeight: 1.5,
+          lineHeight: 1.2,
         }}
       >
         <ReactMarkdown>{msg.text}</ReactMarkdown>
