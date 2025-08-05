@@ -501,8 +501,7 @@ if (!user) {
         margin: "0px auto",
 		paddingTop: 40,
         fontFamily: "Inter, sans-serif",
-        background: "#fff",   // White background
-        color: "#222",        // GPT-like gray for tex
+        background: "#f7f8fa;",   // GPT gray
         minHeight: "100vh",
       }}
     >
@@ -628,9 +627,11 @@ if (!user) {
         key={idx}
         style={{
           margin: "18px 0 0 0",
-          padding: "0 8px 0",
+          padding: "10px 8px 0",
           fontSize: "1.07rem",
           color: "#383a42", // dark GPT gray
+		  background: "transparent",// No box, blends in with main background
+        // you can add lineHeight or letterSpacing here if you want
           lineHeight: 1.6,
           maxWidth: 540,
         }}
