@@ -626,9 +626,9 @@ if (!user) {
       <div
         key={idx}
         style={{
-		  maxWidth: 1000,
-          margin: "2px 0 0 0",
-          padding: "0 0 20px",
+		  maxWidth: 10,  
+          margin: "2px 0 0 0", //margin right
+          padding: "0 0 20px", //
           fontSize: "0.9rem",
           color: "#383a42", // dark GPT gray
 		  background: "transparent",// No box, blends in with main background
