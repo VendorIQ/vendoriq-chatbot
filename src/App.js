@@ -1299,6 +1299,11 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
       pdf.save("vendoriq-compliance-report.pdf");
     });
   };
+console.log("SUMMARY DEBUG:", summary, typeof summary, Array.isArray(summary));
+let cleanedSummary = summary;
+if (Array.isArray(summary) && summary.every(c => typeof c === "string" && c.length === 1)) {
+  cleanedSummary = summary.join("");
+}
 
   return (
     <div
@@ -1380,7 +1385,7 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
         <div style={{ marginTop: 16, background: "#f8fafd", padding: "16px 10px", borderRadius: 7 }}>
           <strong>Summary & Recommendations:</strong>
           <br />
-          <ReactMarkdown>{formatSummary(summary)}</ReactMarkdown>
+          <ReactMarkdown>{formatSummary(cleanedSummary)}</ReactMarkdown>
         </div>
         <div style={{
           marginTop: 28,
