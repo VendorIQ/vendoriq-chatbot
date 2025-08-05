@@ -627,7 +627,7 @@ if (!user) {
         key={idx}
         style={{
 		  maxWidth: 1000,
-          margin: "20px 0 0 0",
+          margin: "2px 0 0 0",
           padding: "0 0 20px",
           fontSize: "0.9rem",
           color: "#383a42", // dark GPT gray
