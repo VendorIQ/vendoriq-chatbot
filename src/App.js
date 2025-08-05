@@ -633,8 +633,7 @@ if (!user) {
           color: "#383a42", // dark GPT gray
 		  background: "transparent",// No box, blends in with main background
         // you can add lineHeight or letterSpacing here if you want
-          lineHeight: 1.6,
-          maxWidth: 540,
+          lineHeight: 1.0,
         }}
       >
         <ReactMarkdown>{msg.text}</ReactMarkdown>
