@@ -4,7 +4,8 @@ import ReactMarkdown from "react-markdown";
 import "./App.css"; // <-- Make sure to create/import this!
 import AuditorReviewPanel from "./AuditorReviewPanel";
 import AuthPage from "./AuthPage";
-
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 
 // --- SUPABASE ---
@@ -1281,8 +1282,7 @@ return (
   </div>
 );
 }
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+
 
 function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
   // PDF Export Handler
