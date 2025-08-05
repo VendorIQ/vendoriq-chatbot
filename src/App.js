@@ -626,9 +626,9 @@ if (!user) {
       <div
         key={idx}
         style={{
-          margin: "18px 0 0 0",
-          padding: "10px 8px 0",
-          fontSize: "1.07rem",
+          margin: "40px 0 0 0",
+          padding: "0px 8px 0",
+          fontSize: "0.9rem",
           color: "#383a42", // dark GPT gray
 		  background: "transparent",// No box, blends in with main background
         // you can add lineHeight or letterSpacing here if you want
