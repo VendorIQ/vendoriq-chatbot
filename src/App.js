@@ -625,7 +625,7 @@ if (!user) {
       >
         <div
           style={{
-            background: "#FFA726",
+            background: "#323232",
             color: "#fff",
             borderRadius: "20px",
             padding: "1px 26px",
