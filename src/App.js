@@ -651,9 +651,9 @@ if (!user) {
         style={{
 		  maxWidth: 1000,  
           margin: "10px 0 0 20px", //x,x,x,margin right
-          padding: "0 0 20px", //
+          padding: "0 0 0", //
           fontSize: "0.9rem",
-          color: "#383a42", // dark GPT gray
+          color: "#fff", // dark GPT gray
 		  background: "transparent",// No box, blends in with main background
         // you can add lineHeight or letterSpacing here if you want
           lineHeight: 1.3,
