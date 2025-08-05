@@ -629,11 +629,11 @@ if (!user) {
             color: "#fff",
             borderRadius: "18px",
             padding: "10px 26px",
-            fontSize: "1.05rem",
+            fontSize: "0.90rem",
             fontWeight: 600,
-            minWidth: "60px",
+            minWidth: "20px",
             maxWidth: "340px",
-            textAlign: "right",
+            textAlign: "center",
             boxShadow: "0 1px 6px #FFA72640",
           }}
         >
