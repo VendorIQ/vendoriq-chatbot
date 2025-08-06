@@ -258,7 +258,7 @@ function ProgressPopup({ results, questions, onJump, onClose }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h4 style={{ color: "#0085CA", margin: 0 }}>Progress</h4>
         <button onClick={onClose}
-          style={{ background: "none", border: "none", fontSize: "1.3rem", color: "#aaa", cursor: "pointer", marginLeft: 8 }}>
+          style={{ background: "none", border: "none", fontSize: "0.9rem", color: "#aaa", cursor: "pointer", marginLeft: 8 }}>
           ×
         </button>
       </div>
@@ -275,7 +275,7 @@ function ProgressPopup({ results, questions, onJump, onClose }) {
             </span>
             <button
               onClick={() => onJump(i)}
-              style={{ marginLeft: 10, fontSize: "0.93rem", cursor: "pointer" }}
+              style={{ marginLeft: 10, fontSize: "0.9rem", cursor: "pointer" }}
             >
               Go
             </button>
@@ -299,7 +299,7 @@ function ProgressPopup({ results, questions, onJump, onClose }) {
       <li
         key={ridx}
         style={{
-          fontSize: "0.97rem",
+          fontSize: "0.9rem",
           color,
           fontWeight: 600,
           marginBottom: 1,
@@ -536,7 +536,7 @@ if (!user) {
         marginRight: 12,
       }}
     />
-    <span style={{ fontWeight: 700, fontSize: "1.18rem", color: "#fff" }}>
+    <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "#fff" }}>
       VendorIQ{companyName ? " | " + companyName : ""}
     </span>
   </div>
@@ -550,7 +550,7 @@ if (!user) {
     border: "none",
     borderRadius: 7,
     padding: "6px 16px",
-    fontSize: "0.98rem",
+    fontSize: "0.9rem",
     fontWeight: 500,
     cursor: "pointer",
     marginLeft: 14,
@@ -567,7 +567,7 @@ if (!user) {
       border: "none",
       borderRadius: 7,
       padding: "6px 18px",
-      fontSize: "0.98rem",
+      fontSize: "0.9rem",
       fontWeight: 500,
       cursor: "pointer",
       marginLeft: 18,
@@ -634,7 +634,6 @@ if (!user) {
             minWidth: "20px",
             maxWidth: "340px",
             textAlign: "center",
-            boxShadow: "0 1px 6px #FFA72640",
           }}
         >
           <ReactMarkdown>{msg.text}</ReactMarkdown>
@@ -786,7 +785,7 @@ if (!user) {
       width: 64,
       height: 64,
       boxShadow: "0 4px 24px #229cf970",
-      fontSize: "2.25rem",
+      fontSize: "0.9rem",
       fontWeight: 800,
       cursor: "pointer",
       display: "flex",
@@ -977,8 +976,6 @@ const submitDisagreement = async () => {
     setDisagreeReason("");
     setDisagreeFile(null);
     // --- DO NOT advance to next requirement ---
-    // setUploaded(true);   <-- REMOVE THIS IF YOU HAVE IT HERE
-    // setAccepted(true);   <-- REMOVE THIS IF YOU HAVE IT HERE
     // --- Instead, keep user on this requirement, let them Accept, Re-upload, or Disagree again ---
   } catch (err) {
     setMessages(prev => [
@@ -1031,7 +1028,7 @@ return (
         >
           <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
             <span style={{ fontSize: 26, color: "#d32f2f", marginRight: 10 }}>❓</span>
-            <span style={{ fontWeight: 700, fontSize: "1.14rem", color: "#d32f2f" }}>
+            <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "#d32f2f" }}>
               Disagree with AI Feedback
             </span>
           </div>
@@ -1047,7 +1044,7 @@ return (
               width: "95%",
               minHeight: 80,
               resize: "vertical",
-              fontSize: "1rem",
+              fontSize: "0.9rem",
               padding: "10px",
               borderRadius: 7,
               border: "1.5px solid #e0e0e0",
@@ -1080,7 +1077,7 @@ return (
               style={{ display: "none" }}
             />
           </label>
-          <span style={{ marginLeft: 8, color: "#777", fontSize: "0.97rem" }}>
+          <span style={{ marginLeft: 8, color: "#777", fontSize: "0.90rem" }}>
             {disagreeFile ? disagreeFile.name : "No file chosen"}
           </span>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 }}>
@@ -1093,7 +1090,7 @@ return (
                 border: "none",
                 borderRadius: 8,
                 padding: "8px 22px",
-                fontSize: "1.01rem",
+                fontSize: "0.9rem",
                 fontWeight: 500,
                 cursor: "pointer",
               }}
@@ -1109,7 +1106,7 @@ return (
                 border: "none",
                 borderRadius: 8,
                 padding: "8px 22px",
-                fontSize: "1.01rem",
+                fontSize: "0.9rem",
                 fontWeight: 600,
                 cursor: "pointer",
               }}
@@ -1165,7 +1162,7 @@ return (
       >
         <div
           style={{
-            fontSize: "1.0rem",
+            fontSize: "0.9rem",
             fontWeight: 700,
             color: "#0085CA",
           }}
@@ -1181,10 +1178,10 @@ return (
           style={{
             margin: "10px auto 0 auto",
             color: "#0085CA",
-            fontSize: "0.97rem",
+            fontSize: "0.90rem",
             fontWeight: 400,
             maxWidth: 400,
-            padding: "4px 0",
+            padding: "20px 0",
             marginBottom: "40px",
           }}
         >
@@ -1201,7 +1198,7 @@ return (
       border: "1.5px solid #b3d6f8",
       borderRadius: 7,
       padding: "3px 12px",
-      fontSize: "1rem",
+      fontSize: "0.9rem",
       color: "#333",
     }}
   >
@@ -1416,7 +1413,7 @@ if (Array.isArray(summary) && summary.every(c => typeof c === "string" && c.leng
             border: "none",
             borderRadius: 7,
             padding: "10px 22px",
-            fontSize: "1.07rem",
+            fontSize: "0.9rem",
             fontWeight: 600,
             cursor: "pointer",
           }}
@@ -1439,7 +1436,7 @@ if (Array.isArray(summary) && summary.every(c => typeof c === "string" && c.leng
             border: "none",
             borderRadius: 7,
             padding: "10px 22px",
-            fontSize: "1.07rem",
+            fontSize: "0.9rem",
             fontWeight: 600,
             cursor: "pointer",
           }}
@@ -1516,7 +1513,7 @@ function ReviewCard({ answers, questions, onRevise, onContinue }) {
                 border: "none",
                 borderRadius: 7,
                 padding: "5px 15px",
-                fontSize: "0.95rem",
+                fontSize: "0.9rem",
                 cursor: "pointer",
               }}
             >
