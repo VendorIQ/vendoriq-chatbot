@@ -843,6 +843,7 @@ const [isDragActive, setIsDragActive] = useState(false);
 const [ocrLang, setOcrLang] = useState("eng");
 const [lastFile, setLastFile] = useState(null);
 
+
 // *** ADD THIS useEffect ***
 useEffect(() => {
   function onRetryUpload(e) {
@@ -895,6 +896,19 @@ useEffect(() => {
 
     if (!response.ok) throw new Error("AI review failed");
     const data = await response.json();
+	
+	 if (
+    data.requireFileRetry ||
+    (typeof data.feedback === "string" &&
+      data.feedback.toLowerCase().includes("could not be read"))
+  ) {
+    setError(
+      "Upload failed: File unreadable. Please try a different file or format (for example, scan to JPG/PNG, or convert to DOCX/PDF)."
+    );
+    setUploading(false);
+    return;
+  }
+
     // 3. Build bubble message (requirement + feedback)
     const botBubble = 
       `🧾 **Question ${questionNumber}, Requirement ${requirementIdx + 1}:**\n\n` +
@@ -914,13 +928,9 @@ useEffect(() => {
       };
       return updated;
     });
-
-
-
   } catch (err) {
     setError("AI review failed: " + err.message);
   }
-
   setUploading(false);
 };
 
