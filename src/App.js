@@ -228,8 +228,6 @@ async function fetchSummary() {
 		  
 		  console.log("Session summary API response:", result);
           
-		  
-		  setSummary(
   if (typeof result?.feedback === "string") {
   setSummary(result.feedback);
 } else if (typeof result?.feedback === "object") {
