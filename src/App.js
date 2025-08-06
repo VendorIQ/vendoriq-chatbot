@@ -1270,39 +1270,45 @@ return (
 
 
 function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
- let cleanedSummary = summary;
+  // === 1. Copy the summary so we don't mutate props ===
+  let cleanedSummary = summary;
 
-// If summary is a stringified JSON, parse it
-if (typeof cleanedSummary === "string") {
-  try {
-    cleanedSummary = JSON.parse(cleanedSummary);
-  } catch {
-    // Not JSON, leave as string
+  // === 2. If summary is a stringified JSON, parse it ===
+  if (typeof cleanedSummary === "string") {
+    try {
+      cleanedSummary = JSON.parse(cleanedSummary);
+    } catch (err) {
+      // If it's not valid JSON, leave as-is (could just be a plain string summary)
+    }
   }
-}
 
-// Robustly drill down into 'feedback' if present, to handle nested feedback objects
-while (
-  cleanedSummary &&
-  typeof cleanedSummary === "object" &&
-  !Array.isArray(cleanedSummary) &&
-  cleanedSummary.feedback
-) {
-  cleanedSummary = cleanedSummary.feedback;
-}
+  // === 3. Robustly drill down into 'feedback' if present, to handle nested feedback objects ===
+  // For example: { feedback: { feedback: { strengths: [], weaknesses: [] } } }
+  while (
+    cleanedSummary &&
+    typeof cleanedSummary === "object" &&
+    !Array.isArray(cleanedSummary) &&
+    cleanedSummary.hasOwnProperty("feedback")
+  ) {
+    cleanedSummary = cleanedSummary.feedback;
+  }
 
-// If it's now just a plain object (not string, not array), *try* to pretty print but only if not strengths/weaknesses
-if (
-  typeof cleanedSummary === "object" &&
-  !Array.isArray(cleanedSummary) &&
-  !cleanedSummary.strengths &&
-  !cleanedSummary.weaknesses
-) {
-  cleanedSummary = JSON.stringify(cleanedSummary, null, 2);
-}
+  // === 4. If it's now just a plain object (not string, not array), 
+  // *try* to pretty print but only if not strengths/weaknesses ===
+  if (
+    cleanedSummary &&
+    typeof cleanedSummary === "object" &&
+    !Array.isArray(cleanedSummary) &&
+    !cleanedSummary.strengths &&
+    !cleanedSummary.weaknesses
+  ) {
+    cleanedSummary = JSON.stringify(cleanedSummary, null, 2);
+  }
 
- // PDF Export Handler
-   const handlePdfExport = () => {
+  // === 5. Render ===
+
+  // PDF Export Handler (unchanged)
+  const handlePdfExport = () => {
     const input = document.getElementById("report-summary-download");
     html2canvas(input, { scale: 2 }).then((canvas) => {
       const imgData = canvas.toDataURL("image/png");
@@ -1316,6 +1322,28 @@ if (
     });
   };
 
+  // === 6. Helper for formatting summary (as before) ===
+  function formatSummary(summary) {
+    if (!summary) return "";
+
+    if (typeof summary === "object") {
+      let str = "";
+      if (Array.isArray(summary.strengths) && summary.strengths.length) {
+        str += "**Strengths:**\n";
+        for (const s of summary.strengths) str += `- ${s}\n`;
+      }
+      if (Array.isArray(summary.weaknesses) && summary.weaknesses.length) {
+        if (str) str += "\n";
+        str += "**Weaknesses:**\n";
+        for (const w of summary.weaknesses) str += `- ${w}\n`;
+      }
+      if (str) return str.trim();
+      // If no strengths/weaknesses, just show the JSON object
+      return JSON.stringify(summary, null, 2);
+    }
+    // Otherwise, it's just a string
+    return summary;
+  }
 
   return (
     <div
@@ -1331,12 +1359,11 @@ if (
         textAlign: "left",
       }}
     >
-      {/* ... */}
       <div id="report-summary-download">
         <h3 style={{ color: "#0085CA", marginTop: 0 }}>
           <span role="img" aria-label="report">📝</span> Compliance Report Card
         </h3>
-        {/* ... your table code ... */}
+        {/* --- Insert your report table here if you have one --- */}
         <div
           style={{
             fontWeight: 700,
@@ -1348,20 +1375,88 @@ if (
           Overall Score: {score ?? "-"} / 100
         </div>
         <div style={{ marginTop: 16, background: "#f8fafd", padding: "16px 10px", borderRadius: 7 }}>
-  <strong>Summary & Recommendations:</strong>
-  <br />
-  {formatSummary(cleanedSummary)?.trim() ? (
-    <ReactMarkdown>{formatSummary(cleanedSummary)}</ReactMarkdown>
-  ) : (
-    <span>No summary data available.</span>
-  )}
-</div>
-        {/* ... rest of the component ... */}
+          <strong>Summary & Recommendations:</strong>
+          <br />
+          {formatSummary(cleanedSummary)?.trim() ? (
+            <ReactMarkdown>{formatSummary(cleanedSummary)}</ReactMarkdown>
+          ) : (
+            <span>No summary data available.</span>
+          )}
+        </div>
+        {/* --- Download/Retry Buttons, as needed --- */}
+        <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
+          <button
+            style={{
+              background: "#229cf9",
+              color: "#fff",
+              border: "none",
+              borderRadius: 8,
+              padding: "10px 22px",
+              fontWeight: 600,
+              fontSize: "1.02rem",
+              cursor: "pointer",
+            }}
+            onClick={handlePdfExport}
+          >
+            Download PDF Report
+          </button>
+          <button
+            style={{
+              background: "#3AB66B",
+              color: "#fff",
+              border: "none",
+              borderRadius: 8,
+              padding: "10px 22px",
+              fontWeight: 600,
+              fontSize: "1.02rem",
+              cursor: "pointer",
+            }}
+            onClick={() => {
+              // Download as TXT file
+              const blob = new Blob(
+                [typeof cleanedSummary === "string" ? cleanedSummary : formatSummary(cleanedSummary)],
+                { type: "text/plain" }
+              );
+              const link = document.createElement("a");
+              link.href = URL.createObjectURL(blob);
+              link.download = "vendoriq-summary.txt";
+              link.click();
+            }}
+          >
+            Download Summary (TXT)
+          </button>
+          {onRetry && (
+            <button
+              style={{
+                background: "#ffbf00",
+                color: "#222",
+                border: "none",
+                borderRadius: 8,
+                padding: "10px 22px",
+                fontWeight: 600,
+                fontSize: "1.02rem",
+                cursor: "pointer",
+              }}
+              onClick={onRetry}
+            >
+              Retry Summary
+            </button>
+          )}
+        </div>
       </div>
-      {/* ... download buttons and retry ... */}
+      <div style={{
+        marginTop: 32,
+        textAlign: "center",
+        color: "#157A4A",
+        fontSize: "1.15rem",
+        fontWeight: 600
+      }}>
+        🎉 Thank you for completing the VendorIQ Assessment! 🎉
+      </div>
     </div>
   );
 }
+
 
 // --- REVIEW CARD ---
 function ReviewCard({ answers, questions, onRevise, onContinue }) {
