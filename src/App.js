@@ -1268,43 +1268,55 @@ return (
 );
 }
 
-
-function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
-  // === 1. Copy the summary so we don't mutate props ===
-  let cleanedSummary = summary;
-
-  // === 2. If summary is a stringified JSON, parse it ===
-  if (typeof cleanedSummary === "string") {
+function cleanSummary(summary) {
+  // 1. Parse if possible
+  if (typeof summary === "string") {
     try {
-      cleanedSummary = JSON.parse(cleanedSummary);
-    } catch (err) {
-      // If it's not valid JSON, leave as-is (could just be a plain string summary)
+      summary = JSON.parse(summary);
+    } catch {
+      /* leave as string */
     }
   }
-
-  // === 3. Robustly drill down into 'feedback' if present, to handle nested feedback objects ===
-  // For example: { feedback: { feedback: { strengths: [], weaknesses: [] } } }
+  // 2. Drill down recursively into feedback if found (handles any level of nesting)
   while (
-    cleanedSummary &&
-    typeof cleanedSummary === "object" &&
-    !Array.isArray(cleanedSummary) &&
-    cleanedSummary.hasOwnProperty("feedback")
+    summary &&
+    typeof summary === "object" &&
+    !Array.isArray(summary) &&
+    Object.keys(summary).length === 1 &&
+    summary.hasOwnProperty("feedback")
   ) {
-    cleanedSummary = cleanedSummary.feedback;
+    summary = summary.feedback;
   }
-
-  // === 4. If it's now just a plain object (not string, not array), 
-  // *try* to pretty print but only if not strengths/weaknesses ===
+  // 3. If still a plain object but NOT strengths/weaknesses, just pretty print
   if (
-    cleanedSummary &&
-    typeof cleanedSummary === "object" &&
-    !Array.isArray(cleanedSummary) &&
-    !cleanedSummary.strengths &&
-    !cleanedSummary.weaknesses
+    summary &&
+    typeof summary === "object" &&
+    !Array.isArray(summary) &&
+    !summary.strengths &&
+    !summary.weaknesses
   ) {
-    cleanedSummary = JSON.stringify(cleanedSummary, null, 2);
+    return JSON.stringify(summary, null, 2);
   }
+  // 4. Otherwise, return as is (string, strengths/weaknesses, etc)
+  return summary;
+}
 
+function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
+	const thStyle = {
+  padding: "7px 8px",
+  background: "#e7f4fc",
+  borderBottom: "2px solid #b3d6f8",
+  fontWeight: 700,
+  textAlign: "left"
+};
+const tdStyle = {
+  padding: "6px 8px",
+  borderBottom: "1px solid #dbeefd",
+  verticalAlign: "top"
+};
+const cleanedSummary = cleanSummary(summary);
+  
+  
   // === 5. Render ===
 
   // PDF Export Handler (unchanged)
@@ -1363,7 +1375,54 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
         <h3 style={{ color: "#0085CA", marginTop: 0 }}>
           <span role="img" aria-label="report">📝</span> Compliance Report Card
         </h3>
-        {/* --- Insert your report table here if you have one --- */}
+        <table style={{
+  width: "100%",
+  borderCollapse: "collapse",
+  margin: "18px 0 22px 0",
+  background: "#f8fafd",
+  borderRadius: 7,
+  overflow: "hidden",
+  fontSize: "0.95rem",
+}}>
+  <thead>
+    <tr style={{ background: "#e7f4fc" }}>
+      <th style={thStyle}>Q#</th>
+      <th style={thStyle}>Question</th>
+      <th style={thStyle}>Answer</th>
+      <th style={thStyle}>Requirement</th>
+      <th style={thStyle}>AI Score</th>
+      <th style={thStyle}>Feedback</th>
+    </tr>
+  </thead>
+  <tbody>
+    {questions.map((q, qIdx) =>
+      q.requirements.length === 0 ? (
+        <tr key={qIdx}>
+          <td style={tdStyle}>{q.number}</td>
+          <td style={tdStyle}>{q.text}</td>
+          <td style={tdStyle}>{breakdown[qIdx]?.answer || "-"}</td>
+          <td style={tdStyle}>-</td>
+          <td style={tdStyle}>-</td>
+          <td style={tdStyle}>-</td>
+        </tr>
+      ) : q.requirements.map((req, rIdx) => (
+        <tr key={`${qIdx}-${rIdx}`}>
+          <td style={tdStyle}>{q.number}</td>
+          <td style={tdStyle}>{q.text}</td>
+          <td style={tdStyle}>{breakdown[qIdx]?.answer || "-"}</td>
+          <td style={tdStyle}>{req}</td>
+          <td style={tdStyle}>
+            {breakdown[qIdx]?.requirements?.[rIdx]?.aiScore ?? "-"}
+          </td>
+          <td style={tdStyle}>
+            {breakdown[qIdx]?.requirements?.[rIdx]?.aiFeedback ?? "-"}
+          </td>
+        </tr>
+      ))
+    )}
+  </tbody>
+</table>
+
         <div
           style={{
             fontWeight: 700,
@@ -1377,12 +1436,12 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
         <div style={{ marginTop: 16, background: "#f8fafd", padding: "16px 10px", borderRadius: 7 }}>
           <strong>Summary & Recommendations:</strong>
           <br />
-          {formatSummary(cleanedSummary)?.trim() ? (
-            <ReactMarkdown>{formatSummary(cleanedSummary)}</ReactMarkdown>
-          ) : (
-            <span>No summary data available.</span>
-          )}
-        </div>
+		  {formatSummary(cleanedSummary)?.trim() ? (
+    <ReactMarkdown>{formatSummary(cleanedSummary)}</ReactMarkdown>
+  ) : (
+    <span>No summary data available.</span>
+  )}
+</div>
         {/* --- Download/Retry Buttons, as needed --- */}
         <div style={{ marginTop: 20, display: "flex", gap: 10 }}>
           <button
