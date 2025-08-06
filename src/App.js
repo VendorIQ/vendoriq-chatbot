@@ -1140,16 +1140,16 @@ return (
         }}
         style={{
           border: isDragActive
-            ? "2.8px solid #229cf9"
-            : "2px dashed #b3d6f8",
+            ? "2.8px solid #4f5963"
+            : "1px dashed #72818f",
           background: isDragActive
-            ? "linear-gradient(108deg, #e4f4ff 70%, #daf0fc 100%)"
-            : "linear-gradient(108deg, #fafdff 60%, #f0f8ff 100%)",
+            ? "#72818f"
+            : "#4f5963",
           borderRadius: 22,
           padding: "20px 0 30px 0",
-          margin: "5px 0",
+          margin: "20px 0",
           minHeight: 134,
-          maxWidth: 370,
+          maxWidth: 500,
           textAlign: "center",
           transition: "all 0.17s",
           boxShadow: isDragActive
