@@ -1284,6 +1284,7 @@ return (
 
 function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
   // PDF Export Handler
+    console.log("Raw summary prop from backend:", summary);
   const handlePdfExport = () => {
     const input = document.getElementById("report-summary-download");
     html2canvas(input, { scale: 2 }).then((canvas) => {
@@ -1325,6 +1326,7 @@ if (
 if (typeof cleanedSummary === "object" && !Array.isArray(cleanedSummary)) {
   // If it still looks like a raw object, convert it to readable string
   cleanedSummary = JSON.stringify(cleanedSummary, null, 2);
+    console.log("Cleaned summary to display:", cleanedSummary);
 }
 
 
