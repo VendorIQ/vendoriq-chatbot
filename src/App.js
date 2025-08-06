@@ -82,39 +82,26 @@ function HourglassLoader() {
   );
 }
 function formatSummary(summary) {
-  // Try parsing JSON if it's a string
-  let obj = summary;
-  if (typeof summary === "string") {
-    try {
-      obj = JSON.parse(summary);
-    } catch {
-      return summary; // Just return as is
-    }
-  }
+  if (!summary) return "";
 
-  if (obj && typeof obj === "object") {
-    // Look for strengths/weaknesses (object root or inside feedback)
-    const feedback = obj.strengths || obj.weaknesses ? obj : obj.feedback;
+  // Handle case where summary is already an object with strengths/weaknesses
+  if (typeof summary === "object") {
     let str = "";
-    if (feedback?.strengths?.length) {
+    if (Array.isArray(summary.strengths) && summary.strengths.length) {
       str += "**Strengths:**\n";
-      for (const s of feedback.strengths) str += `- ${s}\n`;
+      for (const s of summary.strengths) str += `- ${s}\n`;
     }
-    if (feedback?.weaknesses?.length) {
+    if (Array.isArray(summary.weaknesses) && summary.weaknesses.length) {
       if (str) str += "\n";
       str += "**Weaknesses:**\n";
-      for (const w of feedback.weaknesses) str += `- ${w}\n`;
+      for (const w of summary.weaknesses) str += `- ${w}\n`;
     }
     if (str) return str.trim();
-    // If feedback is just a string
-    if (typeof feedback === "string") return feedback.trim();
-    // Otherwise, return pretty-printed
-    return JSON.stringify(obj, null, 2);
+    return JSON.stringify(summary, null, 2); // fallback
   }
-
-  return typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+  // Otherwise, it's just a string
+  return summary;
 }
-
 	  
 // =============== MAIN APP COMPONENT ===============
 export default function App() {
@@ -1283,13 +1270,9 @@ return (
 
 
 function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
-  // PDF Export Handler
-    console.log("Session summary API response:", summary);
-console.log("Session summary API response (stringified):", JSON.stringify(summary, null, 2));
-console.log("Cleaned summary to display:", cleanedSummary);
-console.log("Cleaned summary to display (stringified):", JSON.stringify(cleanedSummary, null, 2));
-
-  const handlePdfExport = () => {
+ let cleanedSummary = summary;
+ // PDF Export Handler
+   const handlePdfExport = () => {
     const input = document.getElementById("report-summary-download");
     html2canvas(input, { scale: 2 }).then((canvas) => {
       const imgData = canvas.toDataURL("image/png");
@@ -1302,37 +1285,32 @@ console.log("Cleaned summary to display (stringified):", JSON.stringify(cleanedS
       pdf.save("vendoriq-compliance-report.pdf");
     });
   };
-
-  // ---- Clean summary ONCE at the top
-  // --- At the top of FinalReportCard ---
-let cleanedSummary = summary;
-
-// Try to parse if it's a JSON string
-if (typeof cleanedSummary === "string") {
-  try {
-    const parsed = JSON.parse(cleanedSummary);
-    cleanedSummary = parsed;
-  } catch {
-    // Not JSON, leave as string
+  // If summary is a stringified JSON, parse it
+  if (typeof cleanedSummary === "string") {
+    try {
+      cleanedSummary = JSON.parse(cleanedSummary);
+    } catch {
+      // Not JSON, leave as string
+    }
   }
-}
-
-// If it's an object and has 'feedback', use it
-if (
-  cleanedSummary &&
-  typeof cleanedSummary === "object" &&
-  cleanedSummary.feedback
-) {
-  cleanedSummary = cleanedSummary.feedback;
-}
-
-// Final fallback: stringify if still object
-if (typeof cleanedSummary === "object" && !Array.isArray(cleanedSummary)) {
-  // If it still looks like a raw object, convert it to readable string
-  cleanedSummary = JSON.stringify(cleanedSummary, null, 2);
-    console.log("Cleaned summary to display:", cleanedSummary);
-}
-
+  // If it's an object and has 'feedback', use feedback directly
+  if (
+    cleanedSummary &&
+    typeof cleanedSummary === "object" &&
+    !Array.isArray(cleanedSummary) &&
+    cleanedSummary.feedback
+  ) {
+    cleanedSummary = cleanedSummary.feedback;
+  }
+  // If it's now just a plain object (not string, not array), *try* to pretty print but only if not strengths/weaknesses
+  if (
+    typeof cleanedSummary === "object" &&
+    !Array.isArray(cleanedSummary) &&
+    !cleanedSummary.strengths &&
+    !cleanedSummary.weaknesses
+  ) {
+    cleanedSummary = JSON.stringify(cleanedSummary, null, 2);
+  }
 
 
   return (
@@ -1366,10 +1344,14 @@ if (typeof cleanedSummary === "object" && !Array.isArray(cleanedSummary)) {
           Overall Score: {score ?? "-"} / 100
         </div>
         <div style={{ marginTop: 16, background: "#f8fafd", padding: "16px 10px", borderRadius: 7 }}>
-          <strong>Summary & Recommendations:</strong>
-          <br />
-          <ReactMarkdown>{formatSummary(cleanedSummary)}</ReactMarkdown>
-        </div>
+  <strong>Summary & Recommendations:</strong>
+  <br />
+  {formatSummary(cleanedSummary)?.trim() ? (
+    <ReactMarkdown>{formatSummary(cleanedSummary)}</ReactMarkdown>
+  ) : (
+    <span>No summary data available.</span>
+  )}
+</div>
         {/* ... rest of the component ... */}
       </div>
       {/* ... download buttons and retry ... */}
