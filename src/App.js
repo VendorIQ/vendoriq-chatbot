@@ -82,6 +82,7 @@ function HourglassLoader() {
   );
 }
 function formatSummary(summary) {
+  // Try parsing JSON if it's a string
   let obj = summary;
   if (typeof summary === "string") {
     try {
@@ -91,20 +92,24 @@ function formatSummary(summary) {
       return summary;
     }
   }
+  // If it's an object with strengths/weaknesses arrays
   if (obj && typeof obj === "object" && ("strengths" in obj || "weaknesses" in obj)) {
     let str = "";
-    if (obj.strengths?.length) {
+    if (Array.isArray(obj.strengths) && obj.strengths.length) {
       str += "**Strengths:**\n";
       for (const s of obj.strengths) str += `- ${s}\n`;
     }
-    if (obj.weaknesses?.length) {
-      str += (str ? "\n" : "") + "**Weaknesses:**\n";
+    if (Array.isArray(obj.weaknesses) && obj.weaknesses.length) {
+      if (str) str += "\n";
+      str += "**Weaknesses:**\n";
       for (const w of obj.weaknesses) str += `- ${w}\n`;
     }
-    return str || JSON.stringify(obj, null, 2);
+    return str.trim() || JSON.stringify(obj, null, 2);
   }
+  // If it's a plain string or other object, just return as string
   return typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
 }
+
 	  
 // =============== MAIN APP COMPONENT ===============
 export default function App() {
@@ -151,31 +156,6 @@ const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callb
   }
   sendNext();
 };
-function formatSummary(summary) {
-  let obj = summary;
-  if (typeof summary === "string") {
-    try {
-      obj = JSON.parse(summary);
-    } catch {
-      // Not JSON, return as is
-      return summary;
-    }
-  }
-  if (obj && typeof obj === "object" && ("strengths" in obj || "weaknesses" in obj)) {
-    let str = "";
-    if (obj.strengths?.length) {
-      str += "**Strengths:**\n";
-      for (const s of obj.strengths) str += `- ${s}\n`;
-    }
-    if (obj.weaknesses?.length) {
-      str += (str ? "\n" : "") + "**Weaknesses:**\n";
-      for (const w of obj.weaknesses) str += `- ${w}\n`;
-    }
-    return str || JSON.stringify(obj, null, 2);
-  }
-  return typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
-}
-
 
 
   const [messages, setMessages] = useState([]);
