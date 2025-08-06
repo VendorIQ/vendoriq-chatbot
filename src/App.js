@@ -1284,7 +1284,11 @@ return (
 
 function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
   // PDF Export Handler
-    console.log("Raw summary prop from backend:", summary);
+    console.log("Session summary API response:", summary);
+console.log("Session summary API response (stringified):", JSON.stringify(summary, null, 2));
+console.log("Cleaned summary to display:", cleanedSummary);
+console.log("Cleaned summary to display (stringified):", JSON.stringify(cleanedSummary, null, 2));
+
   const handlePdfExport = () => {
     const input = document.getElementById("report-summary-download");
     html2canvas(input, { scale: 2 }).then((canvas) => {
