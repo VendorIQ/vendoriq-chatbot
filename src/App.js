@@ -92,21 +92,45 @@ function formatSummary(summary) {
       return summary;
     }
   }
-  // If it's an object with strengths/weaknesses arrays
-  if (obj && typeof obj === "object" && ("strengths" in obj || "weaknesses" in obj)) {
-    let str = "";
-    if (Array.isArray(obj.strengths) && obj.strengths.length) {
-      str += "**Strengths:**\n";
-      for (const s of obj.strengths) str += `- ${s}\n`;
+
+  // --- If AI returns {feedback: {strengths:[], weaknesses:[]}, score: N}
+  if (obj && typeof obj === "object") {
+    if (obj.feedback && typeof obj.feedback === "object") {
+      // Prefer strengths/weaknesses if present
+      const f = obj.feedback;
+      let str = "";
+      if (Array.isArray(f.strengths) && f.strengths.length) {
+        str += "**Strengths:**\n";
+        for (const s of f.strengths) str += `- ${s}\n`;
+      }
+      if (Array.isArray(f.weaknesses) && f.weaknesses.length) {
+        if (str) str += "\n";
+        str += "**Weaknesses:**\n";
+        for (const w of f.weaknesses) str += `- ${w}\n`;
+      }
+      return str.trim() || JSON.stringify(obj.feedback, null, 2);
     }
-    if (Array.isArray(obj.weaknesses) && obj.weaknesses.length) {
-      if (str) str += "\n";
-      str += "**Weaknesses:**\n";
-      for (const w of obj.weaknesses) str += `- ${w}\n`;
+    // If feedback is just a string
+    if (typeof obj.feedback === "string") {
+      return obj.feedback.trim();
     }
-    return str.trim() || JSON.stringify(obj, null, 2);
+    // If strengths/weaknesses are at root
+    if (obj.strengths || obj.weaknesses) {
+      let str = "";
+      if (Array.isArray(obj.strengths) && obj.strengths.length) {
+        str += "**Strengths:**\n";
+        for (const s of obj.strengths) str += `- ${s}\n`;
+      }
+      if (Array.isArray(obj.weaknesses) && obj.weaknesses.length) {
+        if (str) str += "\n";
+        str += "**Weaknesses:**\n";
+        for (const w of obj.weaknesses) str += `- ${w}\n`;
+      }
+      return str.trim() || JSON.stringify(obj, null, 2);
+    }
   }
-  // If it's a plain string or other object, just return as string
+
+  // If still nothing useful, fallback
   return typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
 }
 
