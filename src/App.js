@@ -230,10 +230,13 @@ async function fetchSummary() {
           
 		  
 		  setSummary(
-  typeof result?.feedback === "string"
-    ? result.feedback
-    : JSON.stringify(result?.feedback) || "No summary found."
-);
+  if (typeof result?.feedback === "string") {
+  setSummary(result.feedback);
+} else if (typeof result?.feedback === "object") {
+  setSummary(result.feedback); // <--- pass as object
+} else {
+  setSummary("No summary found.");
+}
 		  setScore(result?.score ?? 0);
           setReportBreakdown(result?.detailedScores ?? []);
 
@@ -1315,7 +1318,15 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
       pdf.save("vendoriq-compliance-report.pdf");
     });
   };
-console.log("SUMMARY DEBUG:", summary, typeof summary, Array.isArray(summary));
+ let cleanedSummary = summary;
+  if (
+    cleanedSummary &&
+    typeof cleanedSummary === "object" &&
+    "feedback" in cleanedSummary &&
+    (Array.isArray(cleanedSummary.feedback.strengths) || Array.isArray(cleanedSummary.feedback.weaknesses))
+  ) {
+    cleanedSummary = cleanedSummary.feedback;
+  }
 let cleanedSummary = summary;
 if (Array.isArray(summary) && summary.every(c => typeof c === "string" && c.length === 1)) {
   cleanedSummary = summary.join("");
