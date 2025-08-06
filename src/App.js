@@ -1375,53 +1375,53 @@ const cleanedSummary = cleanSummary(summary);
         <h3 style={{ color: "#0085CA", marginTop: 0 }}>
           <span role="img" aria-label="report">📝</span> Compliance Report Card
         </h3>
-        <table style={{
-  width: "100%",
-  borderCollapse: "collapse",
-  margin: "18px 0 22px 0",
-  background: "#f8fafd",
-  borderRadius: 7,
-  overflow: "hidden",
-  fontSize: "0.8rem",
-}}>
-  <thead>
-    <tr style={{ background: "#e7f4fc" }}>
-      <th style={thStyle}>Q#</th>
-      <th style={thStyle}>Question</th>
-      <th style={thStyle}>Answer</th>
-      <th style={thStyle}>Requirement</th>
-      <th style={thStyle}>AI Score</th>
-      <th style={thStyle}>Feedback</th>
-    </tr>
-  </thead>
-  <tbody>
-    {questions.map((q, qIdx) =>
-      q.requirements.length === 0 ? (
+                <table style={{ width: "100%", marginBottom: 16, borderCollapse: "collapse", fontSize: "0.9rem" }}>
+          <thead>
+            <tr style={{ background: "#f0faff" }}>
+              <th style={{ padding: "6px", border: "1px solid #eee" }}>Q#</th>
+              <th style={{ padding: "6px", border: "1px solid #eee" }}>Question</th>
+              <th style={{ padding: "6px", border: "1px solid #eee" }}>Answer</th>
+              <th style={{ padding: "6px", border: "1px solid #eee" }}>Requirement</th>
+              <th style={{ padding: "6px", border: "1px solid #eee" }}>AI Score</th>
+              <th style={{ padding: "6px", border: "1px solid #eee" }}>Feedback</th>
+            </tr>
+          </thead>
+          <tbody>
+  {breakdown.map((row, qIdx) =>
+    (row.requirementScores && row.requirementScores.length > 0
+      ? row.requirementScores.map((scoreVal, reqIdx) => (
+          <tr key={`${qIdx}-${reqIdx}`}>
+            <td>{row.questionNumber}</td>
+            <td>{questions[qIdx]?.text.slice(0, 32)}...</td>
+            <td>{row.answer}</td>
+            <td>
+              {questions[qIdx]?.requirements[reqIdx]
+                ? questions[qIdx].requirements[reqIdx].slice(0, 38) + "..."
+                : "-"}
+            </td>
+            <td>{scoreVal != null ? `${scoreVal}/5` : "-"}</td>
+            <td>
+              {row.upload_feedback && Array.isArray(row.upload_feedback)
+                ? (row.upload_feedback[reqIdx] || "-").slice(0, 48)
+                : (row.upload_feedback || "-").slice(0, 48)}
+            </td>
+          </tr>
+        ))
+      : (
         <tr key={qIdx}>
-          <td style={tdStyle}>{q.number}</td>
-          <td style={tdStyle}>{q.text}</td>
-          <td style={tdStyle}>{breakdown[qIdx]?.answer || "-"}</td>
-          <td style={tdStyle}>-</td>
-          <td style={tdStyle}>-</td>
-          <td style={tdStyle}>-</td>
+          <td>{row.questionNumber}</td>
+          <td>{questions[qIdx]?.text.slice(0, 32)}...</td>
+          <td>{row.answer}</td>
+          <td>-</td>
+          <td>-</td>
+          <td>{typeof row.upload_feedback === "string" ? row.upload_feedback.slice(0, 48) : "-"}</td>
         </tr>
-      ) : q.requirements.map((req, rIdx) => (
-        <tr key={`${qIdx}-${rIdx}`}>
-          <td style={tdStyle}>{q.number}</td>
-          <td style={tdStyle}>{q.text}</td>
-          <td style={tdStyle}>{breakdown[qIdx]?.answer || "-"}</td>
-          <td style={tdStyle}>{req}</td>
-          <td style={tdStyle}>
-            {breakdown[qIdx]?.requirements?.[rIdx]?.aiScore ?? "-"}
-          </td>
-          <td style={tdStyle}>
-            {breakdown[qIdx]?.requirements?.[rIdx]?.aiFeedback ?? "-"}
-          </td>
-        </tr>
-      ))
-    )}
-  </tbody>
-</table>
+      )
+    )
+  )}
+</tbody>
+
+        </table>
 
         <div
           style={{
