@@ -1271,6 +1271,36 @@ return (
 
 function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
  let cleanedSummary = summary;
+
+// If summary is a stringified JSON, parse it
+if (typeof cleanedSummary === "string") {
+  try {
+    cleanedSummary = JSON.parse(cleanedSummary);
+  } catch {
+    // Not JSON, leave as string
+  }
+}
+
+// Robustly drill down into 'feedback' if present, to handle nested feedback objects
+while (
+  cleanedSummary &&
+  typeof cleanedSummary === "object" &&
+  !Array.isArray(cleanedSummary) &&
+  cleanedSummary.feedback
+) {
+  cleanedSummary = cleanedSummary.feedback;
+}
+
+// If it's now just a plain object (not string, not array), *try* to pretty print but only if not strengths/weaknesses
+if (
+  typeof cleanedSummary === "object" &&
+  !Array.isArray(cleanedSummary) &&
+  !cleanedSummary.strengths &&
+  !cleanedSummary.weaknesses
+) {
+  cleanedSummary = JSON.stringify(cleanedSummary, null, 2);
+}
+
  // PDF Export Handler
    const handlePdfExport = () => {
     const input = document.getElementById("report-summary-download");
@@ -1285,32 +1315,6 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
       pdf.save("vendoriq-compliance-report.pdf");
     });
   };
-  // If summary is a stringified JSON, parse it
-  if (typeof cleanedSummary === "string") {
-    try {
-      cleanedSummary = JSON.parse(cleanedSummary);
-    } catch {
-      // Not JSON, leave as string
-    }
-  }
-  // If it's an object and has 'feedback', use feedback directly
-  if (
-    cleanedSummary &&
-    typeof cleanedSummary === "object" &&
-    !Array.isArray(cleanedSummary) &&
-    cleanedSummary.feedback
-  ) {
-    cleanedSummary = cleanedSummary.feedback;
-  }
-  // If it's now just a plain object (not string, not array), *try* to pretty print but only if not strengths/weaknesses
-  if (
-    typeof cleanedSummary === "object" &&
-    !Array.isArray(cleanedSummary) &&
-    !cleanedSummary.strengths &&
-    !cleanedSummary.weaknesses
-  ) {
-    cleanedSummary = JSON.stringify(cleanedSummary, null, 2);
-  }
 
 
   return (
