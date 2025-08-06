@@ -88,49 +88,30 @@ function formatSummary(summary) {
     try {
       obj = JSON.parse(summary);
     } catch {
-      // Not JSON, return as is
-      return summary;
+      return summary; // Just return as is
     }
   }
 
-  // --- If AI returns {feedback: {strengths:[], weaknesses:[]}, score: N}
   if (obj && typeof obj === "object") {
-    if (obj.feedback && typeof obj.feedback === "object") {
-      // Prefer strengths/weaknesses if present
-      const f = obj.feedback;
-      let str = "";
-      if (Array.isArray(f.strengths) && f.strengths.length) {
-        str += "**Strengths:**\n";
-        for (const s of f.strengths) str += `- ${s}\n`;
-      }
-      if (Array.isArray(f.weaknesses) && f.weaknesses.length) {
-        if (str) str += "\n";
-        str += "**Weaknesses:**\n";
-        for (const w of f.weaknesses) str += `- ${w}\n`;
-      }
-      return str.trim() || JSON.stringify(obj.feedback, null, 2);
+    // Look for strengths/weaknesses (object root or inside feedback)
+    const feedback = obj.strengths || obj.weaknesses ? obj : obj.feedback;
+    let str = "";
+    if (feedback?.strengths?.length) {
+      str += "**Strengths:**\n";
+      for (const s of feedback.strengths) str += `- ${s}\n`;
     }
+    if (feedback?.weaknesses?.length) {
+      if (str) str += "\n";
+      str += "**Weaknesses:**\n";
+      for (const w of feedback.weaknesses) str += `- ${w}\n`;
+    }
+    if (str) return str.trim();
     // If feedback is just a string
-    if (typeof obj.feedback === "string") {
-      return obj.feedback.trim();
-    }
-    // If strengths/weaknesses are at root
-    if (obj.strengths || obj.weaknesses) {
-      let str = "";
-      if (Array.isArray(obj.strengths) && obj.strengths.length) {
-        str += "**Strengths:**\n";
-        for (const s of obj.strengths) str += `- ${s}\n`;
-      }
-      if (Array.isArray(obj.weaknesses) && obj.weaknesses.length) {
-        if (str) str += "\n";
-        str += "**Weaknesses:**\n";
-        for (const w of obj.weaknesses) str += `- ${w}\n`;
-      }
-      return str.trim() || JSON.stringify(obj, null, 2);
-    }
+    if (typeof feedback === "string") return feedback.trim();
+    // Otherwise, return pretty-printed
+    return JSON.stringify(obj, null, 2);
   }
 
-  // If still nothing useful, fallback
   return typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
 }
 
@@ -1318,17 +1299,20 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
   };
 
   // ---- Clean summary ONCE at the top
-  let cleanedSummary = summary;
+  // --- At the top of FinalReportCard ---
+let cleanedSummary = summary;
 
-// Handle if summary is a JSON string (from backend)
+// Try to parse if it's a JSON string
 if (typeof cleanedSummary === "string") {
   try {
-    const obj = JSON.parse(cleanedSummary);
-    cleanedSummary = obj;
-  } catch {}
+    const parsed = JSON.parse(cleanedSummary);
+    cleanedSummary = parsed;
+  } catch {
+    // Not JSON, leave as string
+  }
 }
 
-// If the summary is an object with a "feedback" field, use it for display
+// If it's an object and has 'feedback', use it
 if (
   cleanedSummary &&
   typeof cleanedSummary === "object" &&
@@ -1336,6 +1320,13 @@ if (
 ) {
   cleanedSummary = cleanedSummary.feedback;
 }
+
+// Final fallback: stringify if still object
+if (typeof cleanedSummary === "object" && !Array.isArray(cleanedSummary)) {
+  // If it still looks like a raw object, convert it to readable string
+  cleanedSummary = JSON.stringify(cleanedSummary, null, 2);
+}
+
 
 
   return (
