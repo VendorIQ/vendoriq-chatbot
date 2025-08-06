@@ -1319,22 +1319,24 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
 
   // ---- Clean summary ONCE at the top
   let cleanedSummary = summary;
-  // If it's an array of single chars (shouldn't happen with latest backend, but just in case)
-  if (Array.isArray(cleanedSummary) && cleanedSummary.every(c => typeof c === "string" && c.length === 1)) {
-    cleanedSummary = cleanedSummary.join("");
-  }
-  // If it's an object with .feedback containing strengths/weaknesses arrays, use that as the actual summary
-  if (
-    cleanedSummary &&
-    typeof cleanedSummary === "object" &&
-    "feedback" in cleanedSummary &&
-    (
-      Array.isArray(cleanedSummary.feedback.strengths) ||
-      Array.isArray(cleanedSummary.feedback.weaknesses)
-    )
-  ) {
-    cleanedSummary = cleanedSummary.feedback;
-  }
+
+// Handle if summary is a JSON string (from backend)
+if (typeof cleanedSummary === "string") {
+  try {
+    const obj = JSON.parse(cleanedSummary);
+    cleanedSummary = obj;
+  } catch {}
+}
+
+// If the summary is an object with a "feedback" field, use it for display
+if (
+  cleanedSummary &&
+  typeof cleanedSummary === "object" &&
+  cleanedSummary.feedback
+) {
+  cleanedSummary = cleanedSummary.feedback;
+}
+
 
   return (
     <div
