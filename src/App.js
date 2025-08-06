@@ -1375,7 +1375,7 @@ const cleanedSummary = cleanSummary(summary);
         <h3 style={{ color: "#0085CA", marginTop: 0 }}>
           <span role="img" aria-label="report">📝</span> Compliance Report Card
         </h3>
-                <table style={{ width: "100%", marginBottom: 16, borderCollapse: "collapse", fontSize: "0.9rem" }}>
+                <table style={{ width: "100%", marginBottom: 16, borderCollapse: "collapse", background: "#f3f4f6", fontSize: "0.7rem" }}>
           <thead>
             <tr style={{ background: "#f0faff" }}>
               <th style={{ padding: "6px", border: "1px solid #eee" }}>Q#</th>
