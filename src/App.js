@@ -1316,19 +1316,25 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
       pdf.save("vendoriq-compliance-report.pdf");
     });
   };
- let cleanedSummary = summary;
+
+  // ---- Clean summary ONCE at the top
+  let cleanedSummary = summary;
+  // If it's an array of single chars (shouldn't happen with latest backend, but just in case)
+  if (Array.isArray(cleanedSummary) && cleanedSummary.every(c => typeof c === "string" && c.length === 1)) {
+    cleanedSummary = cleanedSummary.join("");
+  }
+  // If it's an object with .feedback containing strengths/weaknesses arrays, use that as the actual summary
   if (
     cleanedSummary &&
     typeof cleanedSummary === "object" &&
     "feedback" in cleanedSummary &&
-    (Array.isArray(cleanedSummary.feedback.strengths) || Array.isArray(cleanedSummary.feedback.weaknesses))
+    (
+      Array.isArray(cleanedSummary.feedback.strengths) ||
+      Array.isArray(cleanedSummary.feedback.weaknesses)
+    )
   ) {
     cleanedSummary = cleanedSummary.feedback;
   }
-
-if (Array.isArray(summary) && summary.every(c => typeof c === "string" && c.length === 1)) {
-  cleanedSummary = summary.join("");
-}
 
   return (
     <div
@@ -1344,59 +1350,12 @@ if (Array.isArray(summary) && summary.every(c => typeof c === "string" && c.leng
         textAlign: "left",
       }}
     >
-      {/* --- BEGIN: PDF Export Area --- */}
+      {/* ... */}
       <div id="report-summary-download">
         <h3 style={{ color: "#0085CA", marginTop: 0 }}>
           <span role="img" aria-label="report">📝</span> Compliance Report Card
         </h3>
-        <table style={{ width: "100%", marginBottom: 16, borderCollapse: "collapse", fontSize: "1rem" }}>
-          <thead>
-            <tr style={{ background: "#f1f7fa" }}>
-              <th style={{ padding: "6px", border: "1px solid #eee" }}>Q#</th>
-              <th style={{ padding: "6px", border: "1px solid #eee" }}>Question</th>
-              <th style={{ padding: "6px", border: "1px solid #eee" }}>Answer</th>
-              <th style={{ padding: "6px", border: "1px solid #eee" }}>Requirement</th>
-              <th style={{ padding: "6px", border: "1px solid #eee" }}>AI Score</th>
-              <th style={{ padding: "6px", border: "1px solid #eee" }}>Feedback</th>
-            </tr>
-          </thead>
-          <tbody>
-  {breakdown.map((row, qIdx) =>
-    (row.requirementScores && row.requirementScores.length > 0
-      ? row.requirementScores.map((scoreVal, reqIdx) => (
-          <tr key={`${qIdx}-${reqIdx}`}>
-            <td>{row.questionNumber}</td>
-            <td>{questions[qIdx]?.text.slice(0, 32)}...</td>
-            <td>{row.answer}</td>
-            <td>
-              {questions[qIdx]?.requirements[reqIdx]
-                ? questions[qIdx].requirements[reqIdx].slice(0, 38) + "..."
-                : "-"}
-            </td>
-            <td>{scoreVal != null ? `${scoreVal}/5` : "-"}</td>
-            <td>
-              {row.upload_feedback && Array.isArray(row.upload_feedback)
-                ? (row.upload_feedback[reqIdx] || "-").slice(0, 48)
-                : (row.upload_feedback || "-").slice(0, 48)}
-            </td>
-          </tr>
-        ))
-      : (
-        <tr key={qIdx}>
-          <td>{row.questionNumber}</td>
-          <td>{questions[qIdx]?.text.slice(0, 32)}...</td>
-          <td>{row.answer}</td>
-          <td>-</td>
-          <td>-</td>
-          <td>{typeof row.upload_feedback === "string" ? row.upload_feedback.slice(0, 48) : "-"}</td>
-        </tr>
-      )
-    )
-  )}
-</tbody>
-
-        </table>
-
+        {/* ... your table code ... */}
         <div
           style={{
             fontWeight: 700,
@@ -1407,84 +1366,14 @@ if (Array.isArray(summary) && summary.every(c => typeof c === "string" && c.leng
         >
           Overall Score: {score ?? "-"} / 100
         </div>
-
         <div style={{ marginTop: 16, background: "#f8fafd", padding: "16px 10px", borderRadius: 7 }}>
           <strong>Summary & Recommendations:</strong>
           <br />
           <ReactMarkdown>{formatSummary(cleanedSummary)}</ReactMarkdown>
         </div>
-        <div style={{
-          marginTop: 28,
-          textAlign: "center",
-          fontWeight: 700,
-          fontSize: "1.22rem",
-          color: "#0085CA",
-        }}>
-          🎉 Thank you for completing the VendorIQ Assessment! 🎉
-          <div style={{ margin: "20px 0", display: "flex", justifyContent: "center" }} />
-        </div>
+        {/* ... rest of the component ... */}
       </div>
-      {/* --- END: PDF Export Area --- */}
-
-      {/* --- Download Buttons --- */}
-      <div style={{ marginTop: 18, display: "flex", gap: 12 }}>
-        <button
-          onClick={handlePdfExport}
-          style={{
-            background: "#0085CA",
-            color: "#fff",
-            border: "none",
-            borderRadius: 7,
-            padding: "10px 22px",
-            fontSize: "0.9rem",
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          ⬇️ Download PDF Report
-        </button>
-        <button
-          onClick={() => {
-            const el = document.createElement("a");
-            const file = new Blob([formatSummary(summary)], { type: "text/plain" });
-            el.href = URL.createObjectURL(file);
-            el.download = "vendoriq-compliance-summary.txt";
-            document.body.appendChild(el);
-            el.click();
-            setTimeout(() => document.body.removeChild(el), 100);
-          }}
-          style={{
-            background: "#229cf9",
-            color: "#fff",
-            border: "none",
-            borderRadius: 7,
-            padding: "10px 22px",
-            fontSize: "0.9rem",
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          ⬇️ Download Summary (TXT)
-        </button>
-      </div>
-      {typeof summary === "string" && summary.includes("Failed to generate summary") && onRetry && (
-        <button
-          onClick={onRetry}
-          style={{
-            marginTop: 14,
-            background: "#0085CA",
-            color: "#fff",
-            border: "none",
-            borderRadius: 7,
-            padding: "8px 20px",
-            fontSize: "1.08rem",
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Retry Final Summary
-        </button>
-      )}
+      {/* ... download buttons and retry ... */}
     </div>
   );
 }
