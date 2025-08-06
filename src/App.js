@@ -1325,7 +1325,7 @@ function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
   ) {
     cleanedSummary = cleanedSummary.feedback;
   }
-let cleanedSummary = summary;
+
 if (Array.isArray(summary) && summary.every(c => typeof c === "string" && c.length === 1)) {
   cleanedSummary = summary.join("");
 }
