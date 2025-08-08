@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 import ReactMarkdown from "react-markdown";
 import "./App.css"; // <-- Make sure to create/import this!
@@ -149,7 +149,49 @@ const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callb
   sendNext();
 };
 
+const reviewAllRequirementsForQuestion = useCallback(async (questionIdx) => {
+  setAiLoading(true);
+  try {
+    const reqUploads = results[questionIdx].requirements;
+    const response = await fetch(`${BACKEND_URL}/api/review-question`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: user.email,
+        questionNumber: questions[questionIdx].number,
+        requirements: reqUploads,
+        companyName: profile?.company_name,
+        locationId: profile?.location_id,
+        country: profile?.country,
+        customerUnit: profile?.customer_unit,
+        marketArea: profile?.market_area,
+      }),
+    });
+    if (!response.ok) throw new Error("AI review failed");
+    const data = await response.json();
+    setResults(prev => {
+      const updated = [...prev];
+      updated[questionIdx].questionFeedback = data.feedback;
+      updated[questionIdx].questionScore = data.score;
+      return updated;
+    });
+    setPendingFeedbackQuestion(questionIdx);
+  } catch (err) {
+    setResults(prev => {
+      const updated = [...prev];
+      updated[questionIdx].questionFeedback = "❌ AI review failed. Please try again or contact support.";
+      updated[questionIdx].questionScore = null;
+      return updated;
+    });
+    setPendingFeedbackQuestion(questionIdx);
+  } finally {
+    setAiLoading(false);
+  }
+}, [results, user?.email, profile]);
 
+  const [aiLoading, setAiLoading] = useState(false);
+  const [pendingFeedbackQuestion, setPendingFeedbackQuestion] = useState(null);
+  const [disagreeCounts, setDisagreeCounts] = useState({});
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [typingText, setTypingText] = useState("");
@@ -184,6 +226,7 @@ const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callb
     }))
   );
 async function fetchSummary() {
+  if (!user?.email || !sessionId) return;
         setTyping(true);
         setTypingText("Generating assessment summary...");
         try {
@@ -328,12 +371,17 @@ useEffect(() => {
     if (user) {
       supabase
         .from('profiles')
-        .select('*')
+        .select('company_name, location_id, country, customer_unit, market_area')
         .eq('id', user.id)
         .single()
-        .then(({ data }) => setProfile(data));
+        .then(({ data }) => {
+          setProfile(data);
+          setCompanyName(data?.company_name || "");
+          // You can also set other fields to state if needed
+        });
     } else {
       setProfile(null);
+      setCompanyName("");
     }
   }, [user]);
   
@@ -379,7 +427,7 @@ const saveAnswerToBackend = async (email, questionNumber, answer) => {
     await fetch(`${BACKEND_URL}/api/save-answer`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({ email: user.email.trim().toLowerCase(), questionNumber, answer })
+       body: JSON.stringify({ email: (email || "").trim().toLowerCase(), questionNumber, answer })
     });
   } catch (err) {
     console.error("Failed to save answer:", err);
@@ -479,7 +527,7 @@ if (!user) {
         margin: "0px auto",
 		paddingTop: 40,
         fontFamily: "Inter, sans-serif",
-        background: "#f7f8fa;",   // GPT gray
+        background: "#f7f8fa",   // GPT gray
         minHeight: "100vh",
       }}
     >
@@ -553,6 +601,46 @@ if (!user) {
     Log Out
   </button>
 </nav>
+{pendingFeedbackQuestion !== null && (
+  <QuestionFeedbackPanel
+    questionIdx={pendingFeedbackQuestion}
+    feedback={results[pendingFeedbackQuestion]?.questionFeedback}
+    score={results[pendingFeedbackQuestion]?.questionScore}
+    escalated={disagreeCounts[pendingFeedbackQuestion] >= 2}
+    onAgree={() => {
+      setPendingFeedbackQuestion(null);
+      setStep(prev => prev + 1);
+    }}
+    onDisagree={() => {
+      setDisagreeCounts(prev => {
+        const count = (prev[pendingFeedbackQuestion] || 0) + 1;
+        if (count >= 2) {
+          // Escalate to human auditor
+          fetch(`${BACKEND_URL}/api/escalate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: user.email,
+              questionNumber: questions[pendingFeedbackQuestion].number,
+              companyName: profile?.company_name,
+            }),
+          });
+          alert(`Escalated to human auditor for Question ${questions[pendingFeedbackQuestion].number}`);
+        }
+        return { ...prev, [pendingFeedbackQuestion]: count };
+      });
+    }}
+  />
+)}
+
+{aiLoading && (
+  <div style={{ textAlign: "center", margin: "32px 0" }}>
+    <span className="hourglass-anim" style={{ fontSize: "2.2rem", marginRight: 10 }}>⏳</span>
+    <span style={{ fontSize: "1.08rem", color: "#0085CA", fontWeight: 600 }}>
+      AI is reviewing all requirements for this question...
+    </span>
+  </div>
+)}
 
 
     
@@ -715,6 +803,8 @@ if (!user) {
   setDisagreeLoading={setDisagreeLoading}
   results={results}
   setResults={setResults}
+  reviewAllRequirementsForQuestion={reviewAllRequirementsForQuestion}
+  setPendingFeedbackQuestion={setPendingFeedbackQuestion}
 />
 
       )}
@@ -805,7 +895,9 @@ function UploadSection({
   disagreeLoading,
   setDisagreeLoading,  // Use these variables directly instead of local useState
   results,
-  setResults
+  setResults,
+  reviewAllRequirementsForQuestion,
+  setPendingFeedbackQuestion
 }) {
   const requirement = question.requirements[requirementIdx];
   const [uploading, setUploading] = useState(false);
@@ -907,23 +999,17 @@ useEffect(() => {
   setUploading(false);
 };
 
-const handleAccept = () => {
-  // If there are more requirements for this question, go to the next requirement
+const handleAccept = async () => {
   if (requirementIdx < question.requirements.length - 1) {
-    setUploadReqIdx(requirementIdx + 1);    // Move to next requirement
-    setUploaded(false);                     // Reset upload for new requirement
-    setAccepted(false);                    
-    // Do NOT hide the uploads section
+    setUploadReqIdx(requirementIdx + 1);
+    setUploaded(false);
+    setAccepted(false);
   } else {
-    // All requirements done, move to next question
+    // All requirements done, trigger per-question review
+    await reviewAllRequirementsForQuestion(question.number - 1);
+    setPendingFeedbackQuestion(question.number - 1);
     setShowUploads(false);
     setUploadReqIdx(0);
-    if (reviewMode) {
-      setReviewMode(false);
-      setStep(questions.length);
-    } else {
-      setStep((prev) => prev + 1);
-    }
     setJustAnswered(false);
   }
 };
@@ -1592,3 +1678,80 @@ function ReviewCard({ answers, questions, onRevise, onContinue }) {
     </div>
   );
 }
+// --- AI FEEDBACK PANEL ---
+function QuestionFeedbackPanel({ questionIdx, feedback, score, onAgree, onDisagree, escalated }) {
+  return (
+    <div
+      style={{
+        background: "#fffbe7",
+        border: "1.5px solid #f8c100",
+        borderRadius: 10,
+        padding: 22,
+        margin: "28px auto 0 auto",
+        maxWidth: 540,
+        boxShadow: "0 2px 12px #0001",
+        color: "#223",
+        fontSize: "1rem",
+        textAlign: "left",
+      }}
+    >
+      <h4 style={{ color: "#f8c100", marginTop: 0, marginBottom: 12 }}>
+        <span role="img" aria-label="ai">🤖</span> AI Review for Question {questionIdx + 1}
+      </h4>
+      <div style={{ marginBottom: 10 }}>
+        <strong>Feedback:</strong>
+        <div style={{ margin: "8px 0 0 0", whiteSpace: "pre-line" }}>
+          {feedback || <span style={{ color: "#a00" }}>No feedback available.</span>}
+        </div>
+      </div>
+      {score != null && (
+        <div style={{ marginBottom: 10 }}>
+          <strong>Score:</strong> {score} / 5
+        </div>
+      )}
+      {escalated ? (
+        <div style={{ color: "#d32f2f", fontWeight: 600, marginTop: 12 }}>
+          Escalated to human auditor. Please wait for further review.
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: 14, marginTop: 16 }}>
+          <button
+            onClick={onAgree}
+            disabled={escalated}
+            style={{
+              background: "#3AB66B",
+              color: "#fff",
+              border: "none",
+              borderRadius: 7,
+              padding: "8px 22px",
+              fontWeight: 600,
+              fontSize: "0.95rem",
+              cursor: escalated ? "not-allowed" : "pointer",
+              opacity: escalated ? 0.6 : 1,
+            }}
+          >
+            👍 Agree
+          </button>
+          <button
+            onClick={onDisagree}
+            disabled={escalated}
+            style={{
+              background: "#d32f2f",
+              color: "#fff",
+              border: "none",
+              borderRadius: 7,
+              padding: "8px 22px",
+              fontWeight: 600,
+              fontSize: "0.95rem",
+              cursor: escalated ? "not-allowed" : "pointer",
+              opacity: escalated ? 0.6 : 1,
+            }}
+          >
+            ❌ Disagree
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
