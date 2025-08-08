@@ -1,3 +1,5 @@
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import AdminPage from "./admin/AdminPage";
 import React, { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import ReactMarkdown from "react-markdown";
@@ -103,7 +105,7 @@ function formatSummary(summary) {
 }
 	  
 // =============== MAIN APP COMPONENT ===============
-export default function App() {
+function ChatApp() {
   const [reportBreakdown, setReportBreakdown] = useState([]); // NEW
   const [bubblesComplete, setBubblesComplete] = useState(false); // <--- ADD THIS IF NOT DECLARED
   const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callback) => {
@@ -147,7 +149,7 @@ export default function App() {
   }
   sendNext();
 };
-const handleQuestionReview = async (questionNumber) => {
+const handleQuestionReview = async (questionNumber, ocrLang = "eng") => {
   const files = uploadedFiles[questionNumber] || [];
   try {
     const response = await fetch(`${BACKEND_URL}/api/review-question`, {
@@ -157,7 +159,8 @@ const handleQuestionReview = async (questionNumber) => {
         email: user.email,
         questionNumber,
         files,
-        companyProfile: profile
+        companyProfile: profile,
+		ocrLang
       })
     });
 
@@ -823,6 +826,7 @@ if (!user) {
 		
     </div>
   );
+  
 }
 
 // --- UPLOAD SECTION ---
@@ -931,7 +935,7 @@ const handleAccept = () => {
     // Do NOT hide the uploads section
   } else {
     // All requirements done, move to next question
-    handleQuestionReview(questionNumber);
+    handleQuestionReview(questionNumber, ocrLang);
   }
 };
 
@@ -944,6 +948,7 @@ const submitDisagreement = async () => {
     formData.append("questionNumber", questionNumber);
     formData.append("requirement", requirement);
     formData.append("disagreeReason", disagreeReason);
+	formData.append("ocrLang", ocrLang);
     if (disagreeFile) {
       formData.append("file", disagreeFile);
     }
@@ -1579,3 +1584,15 @@ function ReviewCard({ answers, questions, onRevise, onContinue }) {
     </div>
   );
 }
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<ChatApp />} />
+        <Route path="/admin" element={<AdminPage />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;
