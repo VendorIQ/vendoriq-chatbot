@@ -535,7 +535,7 @@ if (!user) {
         margin: "0px auto",
 		paddingTop: 40,
         fontFamily: "Inter, sans-serif",
-        background: "#f7f8fa",   // GPT gray
+        background: "transparent",   // GPT gray
         minHeight: "100vh",
       }}
     >
