@@ -1,4 +1,4 @@
-// src/AuthPage.jsx
+// src/AuthPage.j sx
 import React, { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
