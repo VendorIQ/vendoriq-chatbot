@@ -16,7 +16,6 @@ const supabase = createClient(
 
 // --- CONSTANTS ---
 const botAvatar = process.env.PUBLIC_URL + "/bot-avatar.png";
-const userAvatar = process.env.PUBLIC_URL + "/user-avatar.png";
 const BACKEND_URL = "https://4d66d45e-0288-4203-935e-1c5d2a182bde-00-38ratc2twzear.pike.replit.dev";
 
 // --- QUESTIONS ---
@@ -107,7 +106,7 @@ function formatSummary(summary) {
 export default function App() {
   const [reportBreakdown, setReportBreakdown] = useState([]); // NEW
   const [bubblesComplete, setBubblesComplete] = useState(false); // <--- ADD THIS IF NOT DECLARED
-const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callback) => {
+  const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callback) => {
   setTyping(true); // <--- Mark as typing at start
   setBubblesComplete(false);
   let idx = 0;
@@ -148,8 +147,58 @@ const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callb
   }
   sendNext();
 };
+const handleQuestionReview = async (questionNumber) => {
+  const files = uploadedFiles[questionNumber] || [];
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/review-question`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: user.email,
+        questionNumber,
+        files,
+        companyProfile: profile
+      })
+    });
 
+    if (!response.ok) throw new Error("AI review failed");
+    const data = await response.json();
 
+    // Show AI feedback bubble
+    setMessages(prev => [...prev, {
+      from: "bot",
+      text: `🧠 **Question ${questionNumber} Review:**\n\n${data.feedback}`
+    }]);
+
+    // Save score & feedback
+    setResults(prev => {
+      const updated = [...prev];
+      updated[questionNumber - 1].questionScore = data.score || null;
+      updated[questionNumber - 1].questionFeedback = data.feedback || "";
+      return updated;
+    });
+
+    // After showing feedback, go to next question
+    setShowUploads(false);
+    setUploadReqIdx(0);
+    if (reviewMode) {
+      setReviewMode(false);
+      setStep(questions.length);
+    } else {
+      setStep(prev => prev + 1);
+    }
+    setJustAnswered(false);
+
+  } catch (err) {
+    console.error(err);
+    setMessages(prev => [...prev, { from: "bot", text: `❌ AI review failed: ${err.message}` }]);
+  }
+};
+
+//================ AKA useState ===========================
+  const [uploadedFiles, setUploadedFiles] = useState({}); // { questionNumber: [filePath, filePath] }
+  const [disagreementCount, setDisagreementCount] = useState({});
+  const [showEscalateForm, setShowEscalateForm] = useState(false);
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [typingText, setTypingText] = useState("");
@@ -303,7 +352,22 @@ useEffect(() => {
   });
 }, []);
 
-
+useEffect(() => {
+  if (user) {
+    supabase
+      .from('profiles')
+      .select('company_name, location_id, country, customer_unit, market_area')
+      .eq('id', user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('Profile fetch error', error);
+        } else {
+          setProfile(data);
+        }
+      });
+  }
+}, [user]);
 
 useEffect(() => {
     // If user just logged in and there are no messages, show intro
@@ -323,22 +387,7 @@ useEffect(() => {
     }
     // eslint-disable-next-line
   }, [user]);
-  
-  useEffect(() => {
-    if (user) {
-      supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-        .then(({ data }) => setProfile(data));
-    } else {
-      setProfile(null);
-    }
-  }, [user]);
-  
-
- 
+   
 
   // --- Dialog logic ---
   function getBotMessage({ step, answer, justAnswered }) {
@@ -379,13 +428,12 @@ const saveAnswerToBackend = async (email, questionNumber, answer) => {
     await fetch(`${BACKEND_URL}/api/save-answer`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({ email: user.email.trim().toLowerCase(), questionNumber, answer })
+      body: JSON.stringify({ email: email.trim().toLowerCase(), questionNumber, answer })
     });
-  } catch (err) {
+ } catch (err) {
     console.error("Failed to save answer:", err);
   }
 };
- 
 
   // --- Auto-scroll chat to bottom whenever messages or typing changes ---
   useEffect(() => {
@@ -424,6 +472,8 @@ const saveAnswerToBackend = async (email, questionNumber, answer) => {
      }, [showSummary, user]);
 
   // --- Handle answer ---
+
+
   const handleAnswer = (answer) => {
   setMessages((prev) => [...prev, { from: "user", text: answer }]);
   setAnswers((prev) => {
@@ -455,8 +505,14 @@ const saveAnswerToBackend = async (email, questionNumber, answer) => {
       }, 350);
     }
   });
-
   setJustAnswered(true);
+};
+const handleDisagree = (questionNumber) => {
+  setDisagreementCount(prev => {
+    const next = { ...prev, [questionNumber]: (prev[questionNumber] || 0) + 1 };
+    if (next[questionNumber] >= 2) setShowEscalateForm(true);
+    return next;
+  });
 };
 
 if (!user) {
@@ -479,7 +535,7 @@ if (!user) {
         margin: "0px auto",
 		paddingTop: 40,
         fontFamily: "Inter, sans-serif",
-        background: "#f7f8fa;",   // GPT gray
+        background: "#f7f8fa",   // GPT gray
         minHeight: "100vh",
       }}
     >
@@ -563,7 +619,7 @@ if (!user) {
   onJump={(qIdx, reqIdx) => {
     setStep(qIdx);
     setUploadReqIdx(reqIdx || 0);
-    setShowUploads(true);
+    setShowUploads(results[qIdx]?.answer === "Yes");
     setShowSummary(false);
     setReviewMode(false);
     setMessages([]);
@@ -682,22 +738,9 @@ if (!user) {
         <UploadSection
   question={questions[step]}
   requirementIdx={uploadReqIdx}
-  setRequirementIdx={setUploadReqIdx}
-  onDone={() => {
-    setShowUploads(false);
-    setUploadReqIdx(0);
-    if (reviewMode) {
-      setReviewMode(false);
-      setStep(questions.length);
-    } else {
-      setStep((prev) => prev + 1);
-    }
-    setJustAnswered(false);
-  }}
   email={user.email}
   sessionId={sessionId}
   questionNumber={questions[step].number}
-  companyName={companyName}     // <-- Add this!
   setMessages={setMessages}
   setShowUploads={setShowUploads}
   setUploadReqIdx={setUploadReqIdx}
@@ -705,7 +748,7 @@ if (!user) {
   setReviewMode={setReviewMode}
   setStep={setStep}
   setJustAnswered={setJustAnswered}
-  showDisagreeModal={showDisagreeModal} //added
+  showDisagreeModal={showDisagreeModal}
   setShowDisagreeModal={setShowDisagreeModal}
   disagreeReason={disagreeReason}
   setDisagreeReason={setDisagreeReason}
@@ -715,7 +758,11 @@ if (!user) {
   setDisagreeLoading={setDisagreeLoading}
   results={results}
   setResults={setResults}
+  uploadedFiles={uploadedFiles}
+  setUploadedFiles={setUploadedFiles}
+  handleQuestionReview={handleQuestionReview}
 />
+
 
       )}
 
@@ -783,8 +830,6 @@ if (!user) {
 function UploadSection({
   question,
   requirementIdx,
-  setRequirementIdx,
-  onDone,
   email,
   sessionId,
   questionNumber,
@@ -792,7 +837,6 @@ function UploadSection({
   setShowUploads,
   setUploadReqIdx,
   reviewMode,
-  companyName,
   setReviewMode,
   setStep,
   setJustAnswered,
@@ -805,14 +849,16 @@ function UploadSection({
   disagreeLoading,
   setDisagreeLoading,  // Use these variables directly instead of local useState
   results,
-  setResults
+  setResults,
+  uploadedFiles,
+  setUploadedFiles,
+  handleQuestionReview  
 }) {
   const requirement = question.requirements[requirementIdx];
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(false);
   const [error, setError] = useState("");
-  const [accepted, setAccepted] = useState(false);
-const [isDragActive, setIsDragActive] = useState(false);
+  const [isDragActive, setIsDragActive] = useState(false);
 const [ocrLang, setOcrLang] = useState("eng");
 const [lastFile, setLastFile] = useState(null);
 
@@ -837,6 +883,8 @@ useEffect(() => {
   return () => window.removeEventListener("vendorIQ:retryUpload", onRetryUpload);
 }, [email, questionNumber, requirement]); // dependencies must match current upload context
 
+
+// handleUpload
   const handleUpload = async (e) => {
   const file = e.target.files[0];
   setLastFile(file);
@@ -852,58 +900,26 @@ useEffect(() => {
     setError("Upload failed: " + uploadError.message);
     return;
   }
-
-  // 2. Send to Ollama for AI feedback
-  try {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("requirement", requirement);
-    formData.append("email", email);
-    formData.append("questionNumber", questionNumber);
-    formData.append("companyName", companyName);
-    formData.append("ocrLang", ocrLang); // <-- ADD THIS LINE
-    const response = await fetch(`${BACKEND_URL}/api/check-file`, {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!response.ok) throw new Error("AI review failed");
-    const data = await response.json();
-	
-	 if (
-    data.requireFileRetry ||
-    (typeof data.feedback === "string" &&
-      data.feedback.toLowerCase().includes("could not be read"))
-  ) {
-    setError(
-      "Upload failed: File unreadable. Please try a different file or format (for example, scan to JPG/PNG, or convert to DOCX/PDF)."
-    );
-    setUploading(false);
-    return;
+  setUploadedFiles(prev => {
+  const updated = { ...prev };
+  const currentFiles = updated[questionNumber] ? [...updated[questionNumber]] : [];
+  if (!currentFiles.includes(filePath)) {
+    currentFiles.push(filePath);
   }
-
-    // 3. Build bubble message (requirement + feedback)
-    const botBubble = 
-      `🧾 **Question ${questionNumber}, Requirement ${requirementIdx + 1}:**\n\n` +
-      `**Requirement:**\n${requirement}\n\n` +
-      `**AI Review:**\n${data.feedback || "No feedback received."}`;
-
-    setMessages(prev => [...prev, { from: "bot", text: botBubble }]);
-    setUploaded(true);
-    setAccepted(false);
-
-    // Set result for this requirement
-    setResults(prev => {
-      const updated = [...prev];
-      updated[questionNumber - 1].requirements[requirementIdx] = {
-        aiScore: data.score || null,
-        aiFeedback: data.feedback || ""
-      };
-      return updated;
-    });
-  } catch (err) {
-    setError("AI review failed: " + err.message);
-  }
+  updated[questionNumber] = currentFiles;
+  return updated;
+});
+// mark this requirement as uploaded so Progress shows "Uploaded"
+  setResults(prev => {
+    const next = [...prev];
+    const r = next[questionNumber - 1].requirements[requirementIdx];
+    next[questionNumber - 1].requirements[requirementIdx] = {
+      ...r,
+      aiFeedback: "Uploaded"
+    };
+    return next;
+  });
+  setUploaded(true);
   setUploading(false);
 };
 
@@ -911,20 +927,11 @@ const handleAccept = () => {
   // If there are more requirements for this question, go to the next requirement
   if (requirementIdx < question.requirements.length - 1) {
     setUploadReqIdx(requirementIdx + 1);    // Move to next requirement
-    setUploaded(false);                     // Reset upload for new requirement
-    setAccepted(false);                    
+    setUploaded(false);                     // Reset upload for new requirement       
     // Do NOT hide the uploads section
   } else {
     // All requirements done, move to next question
-    setShowUploads(false);
-    setUploadReqIdx(0);
-    if (reviewMode) {
-      setReviewMode(false);
-      setStep(questions.length);
-    } else {
-      setStep((prev) => prev + 1);
-    }
-    setJustAnswered(false);
+    handleQuestionReview(questionNumber);
   }
 };
 
@@ -1224,7 +1231,7 @@ return (
     )}
 
 
-    {uploaded && !accepted && (
+    {uploaded && (
       <div className="button-group">
         <button className="continue-btn" onClick={handleAccept}>
           ✅ Accept & Continue
@@ -1321,10 +1328,10 @@ const cleanedSummary = cleanSummary(summary);
 
   // PDF Export Handler (unchanged)
   const handlePdfExport = () => {
-    const input = document.getElementById("report-summary-download");
-    html2canvas(input, { scale: 2 }).then((canvas) => {
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({
+  const input = document.getElementById("report-summary-download");
+  html2canvas(input, { scale: 2 }).then((canvas) => {
+  const imgData = canvas.toDataURL("image/png");
+  const pdf = new jsPDF({
         orientation: "portrait",
         unit: "px",
         format: [canvas.width, canvas.height],
@@ -1335,28 +1342,8 @@ const cleanedSummary = cleanSummary(summary);
   };
 
   // === 6. Helper for formatting summary (as before) ===
-  function formatSummary(summary) {
-    if (!summary) return "";
 
-    if (typeof summary === "object") {
-      let str = "";
-      if (Array.isArray(summary.strengths) && summary.strengths.length) {
-        str += "**Strengths:**\n";
-        for (const s of summary.strengths) str += `- ${s}\n`;
-      }
-      if (Array.isArray(summary.weaknesses) && summary.weaknesses.length) {
-        if (str) str += "\n";
-        str += "**Weaknesses:**\n";
-        for (const w of summary.weaknesses) str += `- ${w}\n`;
-      }
-      if (str) return str.trim();
-      // If no strengths/weaknesses, just show the JSON object
-      return JSON.stringify(summary, null, 2);
-    }
-    // Otherwise, it's just a string
-    return summary;
-  }
-
+   
   return (
     <div
       style={{
