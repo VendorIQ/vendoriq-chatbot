@@ -149,6 +149,7 @@ function ChatApp() {
   }
   sendNext();
 };
+
 const handleQuestionReview = async (questionNumber, ocrLang = "eng") => {
   const files = uploadedFiles[questionNumber] || [];
   try {
