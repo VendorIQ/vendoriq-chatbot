@@ -820,6 +820,8 @@ function MultiUploadSection({
   const [localError, setLocalError] = useState("");
   const [disagreeOpen, setDisagreeOpen] = useState(false);
 const [disagreeReason, setDisagreeReason] = useState("");
+const [evidenceFiles, setEvidenceFiles] = useState([]);           // NEW
+const [isSubmittingDisagree, setIsSubmittingDisagree] = useState(false); // NEW
 const [isValidating, setIsValidating] = useState(false);
 const [isAuditing, setIsAuditing] = useState(false);
   const reqCount = question?.requirements?.length ?? 0; // can be 0..12+
@@ -839,7 +841,26 @@ useEffect(() => {
 }, [questionNumber, reqCount, uploadedFiles]);
 
 
+
   const uploadForIndex = async (idx, file) => {
+	  const MAX_MB = 25;
+const okTypes = [
+  "application/pdf",
+  "image/jpeg","image/png",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain"
+];
+
+if (!okTypes.includes(file.type)) {
+  setLocalError("Unsupported file type. Please upload PDF, JPG/PNG, DOCX, or TXT.");
+  setUploadingIdx(null);
+  return;
+}
+if (file.size > MAX_MB * 1024 * 1024) {
+  setLocalError(`File too large (${Math.ceil(file.size/1e6)} MB). Max ${MAX_MB} MB.`);
+  setUploadingIdx(null);
+  return;
+}
     setUploadingIdx(idx);
     setLocalError("");
     try {
@@ -879,34 +900,73 @@ useEffect(() => {
     setUploadedFiles(prev => ({ ...prev, [questionNumber]: [] }));
   };
 
-  // 1) PRE-CHECK (AI: are these the *right* docs + suggestions)
-  const runPrecheck = async () => {
+ // 1) PRE-CHECK (AI: are these the *right* docs + aggregate coverage)
+const runPrecheck = async () => {
   setLocalError("");
   setIsValidating(true);
   try {
-    if (!paths[0] || !paths[1]) {
-      setLocalError("Please upload the required documents first.");
+    const picked = paths
+      .map((p, i) => (p ? { path: p, requirementIndex: i } : null))
+      .filter(Boolean);
+
+    if (picked.length === 0) {
+      setLocalError("Please upload at least one document first.");
       return;
     }
-    const save = await apiFetch(`/api/audit/${questionNumber}/save-files`, {
-      json: { email, r1Path: paths[0], r2Path: paths[1] },
-    });
-    if (!save.ok) throw new Error("Could not register files");
 
     const res = await apiFetch(`/api/audit/${questionNumber}/validate`, {
-      json: { email, ocrLang },
+      json: {
+        email,
+        ocrLang,
+        files: picked, // [{ path, requirementIndex }]
+        totalRequirements: question?.requirements?.length || 0,
+        requirementLabels: question?.requirements || []
+      },
     });
     if (!res.ok) throw new Error("Validation failed");
     const data = await res.json();
-    setPrecheck(data);            // shows AFTER loader
+
+    // EXPECTED response keys used below:
+    // data.overall.status: "ok" | "warn" | "fail"
+    // data.requirements: [{ index, readable, readability, alignment, missing, moreSuggested, coverage? }]
+    // data.crossRequirement: [{ targetRequirementIndex, coveredByUploads:[idx], coverageScore, evidence }]
+    setPrecheck(data);
+
+    // Update Progress popup statuses
+    setResults(prev => {
+      const next = [...prev];
+      const q = next[questionNumber - 1];
+
+      // mark uploaded items validated/misaligned/unreadable
+      if (q && Array.isArray(data?.requirements)) {
+        data.requirements.forEach(r => {
+          if (q.requirements[r.index]) {
+            q.requirements[r.index].aiFeedback =
+              r.readable === false
+                ? "Unreadable"
+                : (r.alignment?.meets ? "Validated" : "Misaligned");
+          }
+        });
+      }
+
+      // mark non-uploaded but covered items
+      if (q && Array.isArray(data?.crossRequirement)) {
+        data.crossRequirement.forEach(cr => {
+          const idx = cr.targetRequirementIndex;
+          if (q.requirements[idx]) {
+            q.requirements[idx].aiFeedback =
+              cr.coverageScore >= 0.7 ? "Covered by other docs" : "Uncovered";
+          }
+        });
+      }
+      return next;
+    });
   } catch (e) {
     setLocalError(e.message || "Pre-check error");
   } finally {
     setIsValidating(false);
   }
 };
-
-
 
   // 2) AUDIT (final review) – proceed even if pre-check wasn't perfect
   const runAudit = async () => {
@@ -922,16 +982,28 @@ useEffect(() => {
     });
     if (!res.ok) throw new Error("Audit failed");
     const data = await res.json();
-    setAuditResult(data);
-    setResults(prev => {
-      const next = [...prev];
-      next[questionNumber - 1] = {
-        ...next[questionNumber - 1],
-        questionScore: data.score ?? null,
-        questionFeedback: data.feedback || ""
-      };
-      return next;
-    });
+
+// NEW: fallback parse (e.g., "Score: Commitment (4/5)")
+const parsedScoreRaw =
+  Number.isFinite(Number(data?.score)) ? Number(data.score)
+  : Number((data?.feedback || "").match(/(\d+)\s*\/\s*5/)?.[1]) || null;
+
+const parsedScore = parsedScoreRaw != null
+  ? Math.max(0, Math.min(5, parsedScoreRaw))
+  : null;
+
+setAuditResult({ ...data, score: parsedScore });
+setResults(prev => {
+  const next = [...prev];
+  next[questionNumber - 1] = {
+    ...next[questionNumber - 1],
+    questionScore: parsedScore,
+    questionFeedback: data.feedback || ""
+  };
+  return next;
+});
+
+
     setMessages(prev => [
       ...prev,
       { from: "bot", text: `🧠 **AI Audit (Q${questionNumber}):**\n\n${data.feedback || "No feedback."}` },
@@ -960,56 +1032,64 @@ useEffect(() => {
   };
 
   // 4) Disagree flow: request reconsideration + increment/possibly escalate
-  const submitDisagree = async () => {
-    if (!disagreeReason.trim()) return;
-    try {
-      // a) AI reconsideration message
-      const fd = new FormData();
-      fd.append("questionNumber", String(questionNumber));
-      fd.append("requirement", `Question ${questionNumber} overall audit`);
-      fd.append("disagreeReason", disagreeReason);
-      fd.append("ocrLang", ocrLang);
-      const ai = await apiFetch(`/api/disagree-feedback`, { formData: fd });
-      const aiJson = await ai.json();
+const submitDisagree = async () => {
+  if (!disagreeReason.trim()) return;
+  try {
+    setIsSubmittingDisagree(true);
+
+    // a) Ask AI to reconsider (with optional evidence files)
+    const fd = new FormData();
+    fd.append("questionNumber", String(questionNumber));
+    fd.append("requirement", `Question ${questionNumber} overall audit`);
+    fd.append("disagreeReason", disagreeReason);
+    fd.append("ocrLang", ocrLang);
+    evidenceFiles.forEach(f => fd.append("evidence[]", f, f.name));
+
+    const ai = await apiFetch(`/api/disagree-feedback`, { formData: fd });
+    const aiJson = await ai.json();
+
+    setMessages(prev => [
+      ...prev,
+      { from: "bot", text: `🧠 **AI reconsideration:**\n\n${aiJson?.feedback || "No new feedback."}` },
+    ]);
+
+    // b) Count attempt & maybe escalate (server enforces the limit)
+    const ctr = await apiFetch(`/api/audit/${questionNumber}/disagree`, {
+      json: { userArgument: disagreeReason }
+    });
+    const cJson = await ctr.json(); // { escalated, remainingAppeals }
+
+    if (cJson.escalated) {
       setMessages(prev => [
         ...prev,
-        { from: "bot", text: `🧠 **AI reconsideration:**\n\n${aiJson?.feedback || "No new feedback."}` },
+        { from: "bot", text: "🚩 Escalated to Human Auditor. We’ll continue; they will finalize later." },
       ]);
-
-      // b) count attempt & maybe escalate (server enforces the 2x limit)
-      const ctr = await apiFetch(`/api/audit/${questionNumber}/disagree`, {
-        json: { userArgument: disagreeReason }
+      setResults(prev => {
+        const next = [...prev];
+        if (next[questionNumber - 1]) {
+          next[questionNumber - 1].questionScore = null;
+          next[questionNumber - 1].questionFeedback = "Pending Human Auditor";
+        }
+        return next;
       });
-      const cJson = await ctr.json(); // { escalated, remainingAppeals }
-      if (cJson.escalated) {
-        setMessages(prev => [
-          ...prev,
-          { from: "bot", text: "🚩 Escalated to Human Auditor. We’ll continue; they will finalize later." },
-        ]);
-        setDisagreeOpen(false);
-		        setResults(prev => {
-          const next = [...prev];
-          if (next[questionNumber - 1]) {
-            next[questionNumber - 1].questionScore = null;
-            next[questionNumber - 1].questionFeedback = "Pending Human Auditor";
-          }
-          return next;
-        });
-        agreeAndNext();
-        return;
-      } else {
-        setMessages(prev => [
-          ...prev,
-          { from: "bot", text: `ℹ️ You have ${cJson.remainingAppeals ?? 1} disagreement attempt(s) left for this question.` },
-        ]);
-      }
-    } catch (e) {
-      setLocalError(`Disagree error: ${e.message || String(e)}`);
-    } finally {
-      setDisagreeOpen(false);
-      setDisagreeReason("");
+      agreeAndNext();
+      return;
+    } else {
+      setMessages(prev => [
+        ...prev,
+        { from: "bot", text: `ℹ️ You have ${cJson.remainingAppeals ?? 1} disagreement attempt(s) left for this question.` },
+      ]);
     }
-  };
+  } catch (e) {
+    setLocalError(`Disagree error: ${e.message || String(e)}`);
+  } finally {
+    setIsSubmittingDisagree(false);
+    setDisagreeOpen(false);
+    setDisagreeReason("");
+    setEvidenceFiles([]);
+  }
+};
+
 
   const haveFirstTwo = Boolean(paths[0] && paths[1]);
 if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validating documents…" : "Running AI audit…"} />;
@@ -1064,42 +1144,194 @@ if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validat
 
       </div>
 
-      {/* Before pre-check */}
-      {!precheck && !auditResult && (
-        <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
-          <button className="continue-btn" onClick={runAudit} disabled={isAuditing}>▶ Continue to Audit</button>
-          <button className="upload-btn" onClick={clearAll}>♻️ Clear All</button>
-          <button
-            className="disagree-btn"
-            onClick={() => { setPrecheck(null); setAuditResult(null); setShowMultiUpload(false); }}
-          >
-            ✖ Close
-          </button>
-        </div>
-      )}
+ {/* Before pre-check */}
+{!precheck && !auditResult && (
+  <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+    <button
+      className="continue-btn"
+      onClick={runPrecheck}
+      disabled={isValidating || paths.filter(Boolean).length === 0}
+    >
+      🔍 Validate Documents
+    </button>
+    <button
+      className="continue-btn"
+      onClick={runAudit}
+      disabled={isAuditing || paths.filter(Boolean).length === 0}
+    >
+      ▶ Continue to Audit
+    </button>
+    <button className="upload-btn" onClick={clearAll}>♻️ Clear All</button>
+    <button
+      className="disagree-btn"
+      onClick={() => { setPrecheck(null); setAuditResult(null); setShowMultiUpload(false); }}
+    >
+      ✖ Close
+    </button>
+  </div>
+)}
 
       {/* After pre-check: show suggestions + branch */}
       {precheck && !auditResult && (
   <div style={{ marginTop: 16 }}>
     <div style={{ color: "#fff", marginBottom: 8 }}>
       <strong>🧪 Document validation</strong>
-      <ReactMarkdown>{precheck.feedback || ""}</ReactMarkdown>
-      {precheck.isValid === false && (
-        <div style={{ marginTop: 6, fontSize: "0.85rem", color: "#ffd666" }}>
-          You can still continue to audit — we’ll proceed with your files.
+    </div>
+
+    {/* Overall status */}
+    <div style={{
+      background: "#1f2a36",
+      border: "1px solid #2e3c4a",
+      borderRadius: 10,
+      padding: 12,
+      color: "#cfe7ff",
+      marginBottom: 10
+    }}>
+      <div style={{ fontWeight: 700, marginBottom: 6 }}>
+        Overall: {precheck?.overall?.status === "ok" ? "✅ OK" :
+                  precheck?.overall?.status === "warn" ? "⚠️ Needs attention" :
+                  "❌ Fail"}
+      </div>
+      {!!precheck?.overall?.errors?.length && (
+        <div style={{ color: "#ffb3b3", marginTop: 4 }}>
+          <div style={{ fontWeight: 600 }}>Errors (must fix):</div>
+          <ul>{precheck.overall.errors.map((e,i)=><li key={i}>{e}</li>)}</ul>
+        </div>
+      )}
+      {!!precheck?.overall?.warnings?.length && (
+        <div style={{ color: "#ffe7a3", marginTop: 4 }}>
+          <div style={{ fontWeight: 600 }}>Warnings:</div>
+          <ul>{precheck.overall.warnings.map((w,i)=><li key={i}>{w}</li>)}</ul>
         </div>
       )}
     </div>
-    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-      <button className="continue-btn" onClick={runAudit}>
-        ▶ Continue to Audit
-      </button>
-      <button className="upload-btn" onClick={clearAll}>
-        📤 Re-upload
-      </button>
+
+    {/* Per-requirement details */}
+    {Array.isArray(precheck?.requirements) && precheck.requirements.map((r) => (
+      <div key={r.index} style={{
+        background:"#18202b", border:"1px solid #2a3a4a", borderRadius:10,
+        padding:12, color:"#d3e8ff", marginBottom:10
+      }}>
+        <div style={{ fontWeight:700, marginBottom:6 }}>
+          Requirement {r.index + 1}: {question?.requirements?.[r.index] || "—"}
+        </div>
+
+        {/* 1) Readable / crash-check */}
+        <div style={{ marginBottom:6 }}>
+          <b>Readability:</b> {r.readable ? "✅ Readable" : "❌ Unreadable"}
+          {r.readability && (
+            <span style={{ opacity:0.8, marginLeft:8 }}>
+              ({r.readability.mime}, {r.readability.pages} pages{r.readability.ocr ? `, OCR: ${r.readability.ocr}` : ""})
+            </span>
+          )}
+        </div>
+
+        {/* 2) Alignment */}
+        <div style={{ marginBottom:6 }}>
+          <b>Alignment:</b>{" "}
+          {r.alignment?.meets
+            ? `✅ Meets (confidence ${(r.alignment.confidence*100|0)}%)`
+            : "⚠️ Possibly misaligned"}
+          {Array.isArray(r.alignment?.evidence) && r.alignment.evidence.length > 0 && (
+            <ul style={{ marginTop:4 }}>
+              {r.alignment.evidence.map((e,i)=><li key={i}>{e}</li>)}
+            </ul>
+          )}
+        </div>
+
+        {/* 3) Missing required info */}
+        {!!r.missing?.length && (
+          <div style={{ marginBottom:6, color:"#ffd666" }}>
+            <b>Missing (required):</b>
+            <ul>{r.missing.map((m,i)=><li key={i}>{m}</li>)}</ul>
+          </div>
+        )}
+
+        {/* 4) More suggested */}
+        {!!r.moreSuggested?.length && (
+          <div style={{ marginBottom:6, color:"#cfe7ff" }}>
+            <b>Suggested to improve score:</b>
+            <ul>{r.moreSuggested.map((m,i)=><li key={i}>{m}</li>)}</ul>
+          </div>
+        )}
+		{/* Coverage from other uploads */}
+{r.coverage && (
+  <div style={{ marginTop:6 }}>
+    <b>Coverage from other docs:</b>{" "}
+    {r.coverage.fullyCovered
+      ? `✅ Fully covered (by ${r.coverage.coveredBy.map(n => n + 1).join(", ")} — ${Math.round((r.coverage.confidence||0)*100)}%)`
+      : r.coverage.partiallyCovered
+        ? `⚠️ Partially covered (by ${r.coverage.coveredBy.map(n => n + 1).join(", ")} — ${Math.round((r.coverage.confidence||0)*100)}%)`
+        : "—"}
+  </div>
+)}
+
+      </div>
+    ))}
+{Array.isArray(precheck?.crossRequirement) && precheck.crossRequirement.length > 0 && (
+  <div style={{
+    background:"#14202b", border:"1px solid #2a3a4a", borderRadius:10,
+    padding:12, color:"#d3e8ff", marginTop:12
+  }}>
+    <div style={{ fontWeight:700, marginBottom:6 }}>🔗 Cross-requirement coverage</div>
+    <ul style={{ margin:0, paddingLeft:18 }}>
+      {precheck.crossRequirement.map((c, i) => (
+        <li key={i} style={{ marginBottom:6 }}>
+          Requirement {c.targetRequirementIndex + 1} appears covered by uploads {c.coveredByUploads.map(n => n + 1).join(", ")}
+          {" "}({Math.round((c.coverageScore||0) * 100)}% confidence)
+        </li>
+      ))}
+    </ul>
+  </div>
+)}
+
+    {/* The model's Markdown summary, if provided */}
+    {precheck.feedback && (
+      <div style={{ marginTop: 10, color:"#cfe7ff" }}>
+        <ReactMarkdown>{precheck.feedback}</ReactMarkdown>
+      </div>
+    )}
+
+    {/* Actions */}
+    <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:10 }}>
+      {(() => {
+  const missingIdxs = (question?.requirements || [])
+    .map((_, i) => i)
+    .filter(i => !paths[i]); // not uploaded
+
+  const allMissingCovered =
+    Array.isArray(precheck?.crossRequirement) &&
+    missingIdxs.every(i => {
+      const cr = precheck.crossRequirement.find(c => c.targetRequirementIndex === i);
+      return cr && (cr.coverageScore || 0) >= 0.7; // threshold
+    });
+
+  const hasUnreadable = precheck?.requirements?.some(r => r.readable === false);
+  const hardFail = precheck?.overall?.status === "fail" && !allMissingCovered;
+
+  return (
+    <button
+      className="continue-btn"
+      onClick={runAudit}
+      disabled={isAuditing || hasUnreadable || hardFail}
+      title={
+        hasUnreadable
+          ? "Fix unreadable files before continuing"
+          : hardFail
+            ? "Some requirements are neither uploaded nor covered"
+            : ""
+      }
+    >
+      ▶ Continue to Audit
+    </button>
+  );
+})()}
+
+      <button className="upload-btn" onClick={clearAll}>📤 Re-upload</button>
     </div>
   </div>
 )}
+
 
 
       {/* After audit: agree / retry / disagree */}
@@ -1129,34 +1361,71 @@ if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validat
                 zIndex: 9999,
               }}
             >
-              <div style={{ background: "#fff", borderRadius: 12, padding: 18, width: 420 }}>
-                <div style={{ fontWeight: 700, color: "#d32f2f", marginBottom: 8 }}>
-                  Disagree with AI feedback
-                </div>
-                <textarea
-                  placeholder="Explain your disagreement with facts or references..."
-                  value={disagreeReason}
-                  onChange={e => setDisagreeReason(e.target.value)}
-                  style={{
-                    width: "100%",
-                    minHeight: 90,
-                    border: "1.5px solid #e0e0e0",
-                    borderRadius: 8,
-                    padding: 8,
-                    fontSize: "0.9rem",
-                  }}
-                />
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
-                  <button className="upload-btn" onClick={() => setDisagreeOpen(false)}>Cancel</button>
-                  <button
-                    className="disagree-btn"
-                    onClick={submitDisagree}
-                    disabled={!disagreeReason.trim()}
-                  >
-                    Submit
-                  </button>
-                </div>
-              </div>
+              <div style={{ background:"#fff", borderRadius:12, padding:16, width:"min(92vw, 480px)" }}>
+  <div style={{ fontWeight:700, color:"#d32f2f", marginBottom:8 }}>
+    Disagree with AI feedback
+  </div>
+
+  <textarea
+  /* smaller & consistent */
+    rows={5}  
+    placeholder="Explain your disagreement with facts or references..."
+    value={disagreeReason}
+    onChange={e => setDisagreeReason(e.target.value)}
+    style={{
+      width:"100%",
+      border:"1.5px solid #e0e0e0",
+      borderRadius:8,
+      padding:8,
+      fontSize:"0.9rem",
+      resize:"vertical"
+    }}
+  />
+
+  {/* NEW: optional evidence upload */}
+  <div style={{ marginTop:10 }}>
+    <label className="browse-btn">
+      📎 Attach evidence (PDF/JPG/PNG/DOCX) — optional
+      <input
+        type="file"
+        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+        multiple
+        hidden
+        onChange={e => setEvidenceFiles(Array.from(e.target.files || []))}
+      />
+    </label>
+
+    {evidenceFiles.length > 0 && (
+      <ul style={{ marginTop:6, fontSize:"0.85rem", color:"#555" }}>
+        {evidenceFiles.map((f, i) => (
+          <li key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+            <span>{f.name}</span>
+            <button
+              className="upload-btn"
+              onClick={() => setEvidenceFiles(prev => prev.filter((_, idx) => idx !== i))}
+            >
+              remove
+            </button>
+          </li>
+        ))}
+      </ul>
+    )}
+  </div>
+
+  <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:10 }}>
+    <button className="upload-btn" onClick={() => setDisagreeOpen(false)} disabled={isSubmittingDisagree}>
+      Cancel
+    </button>
+    <button
+      className="disagree-btn"
+      onClick={submitDisagree}
+      disabled={!disagreeReason.trim() || isSubmittingDisagree}
+    >
+      {isSubmittingDisagree ? "Submitting…" : "Submit"}
+    </button>
+  </div>
+</div>
+
             </div>
           )}
         </div>
