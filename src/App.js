@@ -1068,8 +1068,6 @@ if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validat
       {!precheck && !auditResult && (
         <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
           <button className="continue-btn" onClick={runAudit} disabled={isAuditing}>▶ Continue to Audit</button>
-  🔍 Validate Documents
-</button>
           <button className="upload-btn" onClick={clearAll}>♻️ Clear All</button>
           <button
             className="disagree-btn"
