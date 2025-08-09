@@ -865,72 +865,80 @@ useEffect(() => {
   };
 
   // 1) PRE-CHECK (AI: are these the *right* docs + suggestions)
-  const runPrecheck = async () => {
-    setLocalError("");
-    try {
-      const files = paths.filter(Boolean);
-      if (files.length === 0) {
-        setLocalError("Please upload at least one file.");
-        return;
-      }
-      const res = await apiFetch(`/api/review-question`, {
-        json: {
-          questionNumber,
-          files,
-          companyProfile: profile || {},
-          ocrLang
-        }
-      });
-      if (!res.ok) throw new Error("Pre-check failed");
-      const data = await res.json(); // { feedback, score }
-      setPrecheck(data);
-      setMessages(prev => [
-        ...prev,
-        { from: "bot", text: `🧪 **Document pre-check (Q${questionNumber}):**\n\n${data.feedback || "No feedback."}` },
-      ]);
-    } catch (e) {
-      setLocalError(e.message || "Pre-check error");
+  cconst runPrecheck = async () => {
+  setLocalError("");
+  try {
+    // Require at least the first 2 required files (Q1 has 2)
+    if (!paths[0] || !paths[1]) {
+      setLocalError("Please upload the required documents first.");
+      return;
     }
-  };
+
+    // 1) Save r1 & r2 to the answers row
+    const save = await apiFetch(`/api/audit/${questionNumber}/save-files`, {
+      json: { email, r1Path: paths[0], r2Path: paths[1] },
+    });
+    if (!save.ok) throw new Error("Could not register files");
+
+    // 2) Validate those files (lightweight, NO scoring)
+    const res = await apiFetch(`/api/audit/${questionNumber}/validate`, {
+      json: { email, ocrLang },
+    });
+    if (!res.ok) throw new Error("Validation failed");
+    const data = await res.json();              // { isValid, feedback }
+
+    setPrecheck(data);                          // <-- shows inline
+    // no setMessages(): prevents the duplicate
+  } catch (e) {
+    setLocalError(e.message || "Pre-check error");
+  }
+};
+
 
   // 2) AUDIT (final review) – proceed even if pre-check wasn't perfect
   const runAudit = async () => {
-    setLocalError("");
-    try {
-      const files = paths.filter(Boolean);
-      if (files.length === 0) {
-        setLocalError("Please upload at least one file.");
-        return;
-      }
-      const res = await apiFetch(`/api/review-question`, {
-        json: {
-          questionNumber,
-          files,
-          companyProfile: profile || {},
-          ocrLang
-        }
-      });
-      if (!res.ok) throw new Error("Audit failed");
-      const data = await res.json(); // { feedback, score }
-      setAuditResult(data);
-	    setResults(prev => {
-        const next = [...prev];
-        next[questionNumber - 1] = {
-          ...next[questionNumber - 1],
-          questionScore: data.score ?? null,
-          questionFeedback: data.feedback || ""
-        };
-        return next;
-      });
-
-      setMessages(prev => [
-        ...prev,
-        { from: "bot", text: `🧠 **AI Audit (Q${questionNumber}):**\n\n${data.feedback || "No feedback."}` },
-      ]);
-    } catch (e) {
-      setLocalError(e.message || "Audit error");
+  setLocalError("");
+  try {
+    // Safety: ensure we have the 2 files registered (ok if runPrecheck did it)
+    if (!paths[0] || !paths[1]) {
+      setLocalError("Please upload the required documents first.");
+      return;
     }
-  };
+
+    const res = await apiFetch(`/api/audit/${questionNumber}/process`, {
+      json: {
+        email,
+        companyProfile: profile || {},
+        ocrLang,
+        insist: true, // proceed even if validation flagged a mismatch
+      },
+    });
+    if (!res.ok) throw new Error("Audit failed");
+
+    const data = await res.json();              // { score, feedback }
+    setAuditResult(data);
+
+    // store into results table for Progress/Report
+    setResults(prev => {
+      const next = [...prev];
+      next[questionNumber - 1] = {
+        ...next[questionNumber - 1],
+        questionScore: data.score ?? null,
+        questionFeedback: data.feedback || ""
+      };
+      return next;
+    });
+
+    // (optional) show audit feedback in chat
+    setMessages(prev => [
+      ...prev,
+      { from: "bot", text: `🧠 **AI Audit (Q${questionNumber}):**\n\n${data.feedback || "No feedback."}` },
+    ]);
+  } catch (e) {
+    setLocalError(e.message || "Audit error");
+  }
+};
+
 
   // 3) User agrees – advance to next question
   const agreeAndNext = () => {
@@ -1069,20 +1077,27 @@ useEffect(() => {
 
       {/* After pre-check: show suggestions + branch */}
       {precheck && !auditResult && (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ color: "#fff", marginBottom: 8 }}>
-            <ReactMarkdown>{precheck.feedback || ""}</ReactMarkdown>
-          </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button className="continue-btn" onClick={runAudit}>
-              ▶ Continue to Audit
-            </button>
-            <button className="upload-btn" onClick={clearAll}>
-              📤 Re-upload
-            </button>
-          </div>
+  <div style={{ marginTop: 16 }}>
+    <div style={{ color: "#fff", marginBottom: 8 }}>
+      <strong>🧪 Document validation</strong>
+      <ReactMarkdown>{precheck.feedback || ""}</ReactMarkdown>
+      {precheck.isValid === false && (
+        <div style={{ marginTop: 6, fontSize: "0.85rem", color: "#ffd666" }}>
+          You can still continue to audit — we’ll proceed with your files.
         </div>
       )}
+    </div>
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      <button className="continue-btn" onClick={runAudit}>
+        ▶ Continue to Audit
+      </button>
+      <button className="upload-btn" onClick={clearAll}>
+        📤 Re-upload
+      </button>
+    </div>
+  </div>
+)}
+
 
       {/* After audit: agree / retry / disagree */}
       {auditResult && (
