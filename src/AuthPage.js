@@ -112,25 +112,22 @@ export default function AuthPage({ onAuth }) {
       // Optional: notify backend of supplier name (non-blocking)
       const finalCompanyName = profile.company_name || suppliedCompany || "";
       if (finalCompanyName) {
-        try {
-          await fetch(
-            `${
-              process.env.REACT_APP_BACKEND_URL ||
-              "https://vendoriq-backend.onrender.com"
-            }/api/set-supplier-name`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                email: user.email,
-                supplierName: finalCompanyName,
-              }),
-            }
-          );
-        } catch (e) {
-          console.warn("set-supplier-name failed:", e?.message || e);
-        }
+  try {
+    await fetch(
+      `${process.env.REACT_APP_BACKEND_URL}/api/set-supplier-name`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: user.email,
+          supplierName: finalCompanyName,
+        }),
       }
+    );
+  } catch (e) {
+    console.warn("set-supplier-name failed:", e?.message || e);
+  }
+}
 
       // Hand off to App (App expects (userObj, company))
       onAuth(user, finalCompanyName);
@@ -141,49 +138,98 @@ export default function AuthPage({ onAuth }) {
     }
   };
 
+const inputStyle = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: 10,
+  marginBottom: 12,
+  background: "#fff",
+  color: "#111",
+  border: "1px solid rgba(255,255,255,0.35)",
+  borderRadius: 10,
+  outline: "none",
+};
+
+const buttonStyle = {
+  width: "100%",
+  boxSizing: "border-box",
+  padding: 12,
+  marginTop: 2,
+  borderRadius: 10,
+  border: "none",
+  fontWeight: 700,
+  color: "#222",
+  background: "#eee",
+  cursor: "pointer",
+};
+
   return (
-    <div style={{ maxWidth: 420, margin: "80px auto", textAlign: "center" }}>
-      <h2 style={{ marginBottom: 16 }}>{isLogin ? "Login" : "Sign Up"}</h2>
+  <div
+    style={{
+      minHeight: "100vh",
+      backgroundImage: `url(${process.env.PUBLIC_URL + "/ericsson_bg.jpg"})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+    }}
+  >
+    <div
+      style={{
+        backgroundColor: "rgba(0,0,0,0.6)",
+        padding: "30px",
+        borderRadius: "12px",
+        maxWidth: 460, backdropFilter: "blur(6px)",
+        width: "100%",
+        textAlign: "center",
+        boxShadow: "0 4px 15px rgba(0,0,0,0.3)",
+      }}
+    >
+      <h2 style={{ marginBottom: 16, color: "#fff" }}>
+        {isLogin ? "Login" : "Sign Up"}
+      </h2>
+
 
       <input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        style={{ padding: 8, width: "100%", marginBottom: 10 }}
-        autoComplete="email"
-        required
-      />
+  type="email"
+  placeholder="Email"
+  value={email}
+  onChange={(e) => setEmail(e.target.value)}
+  style={inputStyle}
+  autoComplete="email"
+  required
+/>
 
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        style={{ padding: 8, width: "100%", marginBottom: 10 }}
-        autoComplete={isLogin ? "current-password" : "new-password"}
-        required
-      />
+<input
+  type="password"
+  placeholder="Password"
+  value={password}
+  onChange={(e) => setPassword(e.target.value)}
+  style={inputStyle}
+  autoComplete={isLogin ? "current-password" : "new-password"}
+  required
+/>
 
-      {/* Company Name only shown on Sign Up */}
-      {!isLogin && (
-        <input
-          type="text"
-          placeholder="Company Name (required)"
-          value={companyName}
-          onChange={(e) => setCompanyName(e.target.value)}
-          style={{ padding: 8, width: "100%", marginBottom: 10 }}
-          required
-        />
-      )}
+{!isLogin && (
+  <input
+    type="text"
+    placeholder="Company Name (required)"
+    value={companyName}
+    onChange={(e) => setCompanyName(e.target.value)}
+    style={inputStyle}
+    required
+  />
+)}
 
-      <button
-        onClick={handleAuth}
-        style={{ padding: 10, width: "100%" }}
-        disabled={loading}
-      >
-        {loading ? "Please wait…" : isLogin ? "Login" : "Sign Up"}
-      </button>
+<button
+  onClick={handleAuth}
+  style={buttonStyle}
+  disabled={loading}
+>
+  {loading ? "Please wait…" : isLogin ? "Login" : "Sign Up"}
+</button>
+
 
       {error && <p style={{ color: "tomato", marginTop: 10 }}>{error}</p>}
 
@@ -204,6 +250,19 @@ export default function AuthPage({ onAuth }) {
           {isLogin ? "Sign Up" : "Login"}
         </button>
       </p>
+	  
+{/* New credit line */}
+<p style={{
+    marginTop: 4,
+    fontSize: "0.7rem",
+    color: "rgba(255,255,255,0.6)",
+    textAlign: "right",
+    paddingRight: "6px"
+  }}
+>
+  by markley
+</p>
     </div>
+	</div>
   );
 }
