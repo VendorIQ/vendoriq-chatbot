@@ -122,6 +122,13 @@ function ChatApp() {
   const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callback) => {
   setTyping(true); // <--- Mark as typing at start
   setBubblesComplete(false);
+  // ⬇️ Guard for empty arrays
+  if (!messagesArray?.length) {
+    setTyping(false);
+    setBubblesComplete(true);
+    if (typeof callback === "function") callback(); // optional
+    return;
+  }
   let idx = 0;
   function sendNext() {
     let i = 0;
@@ -167,6 +174,7 @@ function ChatApp() {
   const [showMultiUpload, setShowMultiUpload] = useState(false); // NEW: gate for multi-upload
   const [precheck, setPrecheck] = useState(null);                // NEW: {feedback, score} from pre-check
   const [auditResult, setAuditResult] = useState(null);          // NEW: {feedback, score} after audit
+  const [focusReqIdx, setFocusReqIdx] = useState(null);
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
   const [step, setStep] = useState(-1);
@@ -197,7 +205,6 @@ function ChatApp() {
   );
 async function fetchSummary() {
         setTyping(true);
-        setTypingText("Generating assessment summary...");
 try {
   const response = await apiFetch(`/api/session-summary`, {
     json: {} // backend will inject email from token
@@ -221,8 +228,7 @@ try {
           setSummary("Failed to generate summary. Please contact support.");
         }
         setTyping(false);
-        setTypingText("");
-      }
+        }
 
 	  
 function ProgressPopup({ results, questions, onJump, onClose }) {
@@ -264,7 +270,7 @@ function ProgressPopup({ results, questions, onJump, onClose }) {
               Go
             </button>
             {/* Requirement Progress as Text */}
-            {results[i]?.answer === "Yes" && (
+            {results[i]?.answer === "Yes" && Array.isArray(q.requirements) && (
               <ul style={{ marginLeft: 18, marginTop: 4, marginBottom: 2, paddingLeft: 0 }}>
                 {q.requirements.map((req, ridx) => {
                   const feedback = results[i].requirements[ridx]?.aiFeedback;
@@ -450,6 +456,7 @@ saveAnswerToBackend(questionNumber, answer); // token supplies email
   const botMsgs = getBotMessage({ step, answer, justAnswered: true });
   sendBubblesSequentially(botMsgs, "bot", 650, () => {
       if (answer === "Yes" && questions[step].requirements.length > 0) {
+	  setFocusReqIdx(null);          // <— add this line
       setShowMultiUpload(true);   // NEW
          } else {
       setTimeout(() => {
@@ -676,7 +683,6 @@ if (!user) {
       // Re-trigger the summary fetch
       setSummary("");
       setTyping(true);
-      setTypingText("Regenerating summary...");
       // Your summary-fetch logic here (see below)
       fetchSummary();
     }}
@@ -791,6 +797,7 @@ function MultiUploadSection({
   profile,
   results,                 // NEW
   setResults,              // NEW
+  focusReqIdx,
 }) {
   const [ocrLang, setOcrLang] = useState("eng");
   const [paths, setPaths] = useState(() => uploadedFiles[questionNumber] || []); // file paths per requirement
