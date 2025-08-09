@@ -93,26 +93,6 @@ const questions = [
   },
 ];
 
-// --- HOURGLASS LOADER ---
-function HourglassLoader() {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        margin: "22px 0 12px 0",
-        justifyContent: "flex-start",
-      }}
-    >
-      <span className="hourglass-anim" style={{ fontSize: "2.2rem", marginRight: 10 }}>
-        ⏳
-      </span>
-      <span style={{ fontSize: "1.08rem", color: "#0085CA", fontWeight: 600 }}>
-        Reviewing your document...
-      </span>
-    </div>
-  );
-}
 function formatSummary(summary) {
   if (!summary) return "";
 
@@ -181,58 +161,17 @@ function ChatApp() {
   sendNext();
 };
 
-const handleQuestionReview = async (questionNumber, ocrLang = "eng") => {
-  const files = uploadedFiles[questionNumber] || [];
-try {
-  const response = await apiFetch(`/api/review-question`, {
-    json: { questionNumber, files, companyProfile: profile, ocrLang }
-  });
-    if (!response.ok) throw new Error("AI review failed");
-    const data = await response.json();
-
-    // Show AI feedback bubble
-    setMessages(prev => [...prev, {
-      from: "bot",
-      text: `🧠 **Question ${questionNumber} Review:**\n\n${data.feedback}`
-    }]);
-
-    // Save score & feedback
-    setResults(prev => {
-      const updated = [...prev];
-      updated[questionNumber - 1].questionScore = data.score || null;
-      updated[questionNumber - 1].questionFeedback = data.feedback || "";
-      return updated;
-    });
-
-    // After showing feedback, go to next question
-    setShowUploads(false);
-    setUploadReqIdx(0);
-    if (reviewMode) {
-      setReviewMode(false);
-      setStep(questions.length);
-    } else {
-      setStep(prev => prev + 1);
-    }
-    setJustAnswered(false);
-
-  } catch (err) {
-    console.error(err);
-    setMessages(prev => [...prev, { from: "bot", text: `❌ AI review failed: ${err.message}` }]);
-  }
-};
 
 //================ AKA useState ===========================
   const [uploadedFiles, setUploadedFiles] = useState({}); // { questionNumber: [filePath, filePath] }
-  const [disagreementCount, setDisagreementCount] = useState({});
-  const [showEscalateForm, setShowEscalateForm] = useState(false);
+  const [showMultiUpload, setShowMultiUpload] = useState(false); // NEW: gate for multi-upload
+  const [precheck, setPrecheck] = useState(null);                // NEW: {feedback, score} from pre-check
+  const [auditResult, setAuditResult] = useState(null);          // NEW: {feedback, score} after audit
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
-  const [typingText, setTypingText] = useState("");
   const [step, setStep] = useState(-1);
-  const [showUploads, setShowUploads] = useState(false);
   const [justAnswered, setJustAnswered] = useState(false);
   const [sessionId, setSessionId] = useState(null);
-  const [uploadReqIdx, setUploadReqIdx] = useState(0);
   const [showIntro, setShowIntro] = useState(false);
   const [summary, setSummary] = useState("");
   const [score, setScore] = useState(null);
@@ -241,10 +180,8 @@ try {
   const [reviewMode, setReviewMode] = useState(false);
   const chatEndRef = useRef(null);
   const [companyName, setCompanyName] = useState("");
-  const [disagreeLoading, setDisagreeLoading] = useState(false);
-  const [showDisagreeModal, setShowDisagreeModal] = useState(false);
-  const [disagreeReason, setDisagreeReason] = useState("");
-  const [disagreeFile, setDisagreeFile] = useState(null);
+
+
   const [user, setUser] = useState(null);
   const [showProgress, setShowProgress] = useState(false);
   const [profile, setProfile] = useState(null);
@@ -471,20 +408,15 @@ const saveAnswerToBackend = async (questionNumber, answer) => {
 
   // --- Ask next question only when appropriate ---
   useEffect(() => {
-    if (
-      step >= 0 &&
-      step < questions.length &&
-      !justAnswered &&
-      !showUploads &&
-      !showIntro
-    ) {
+if ( step >= 0 && step < questions.length && !justAnswered && !showMultiUpload && !showIntro ) {
       sendBubblesSequentially(
         [`**Question ${questions[step].number}:** ${questions[step].text}`],
         "bot"
       );
     }
     // eslint-disable-next-line
-  }, [step, showUploads, showIntro]);
+   }, [step, showMultiUpload, showIntro, justAnswered]);
+
 
   // --- Show review card before summary ---
   const showReview = !showSummary && step >= questions.length && !reviewMode;
@@ -517,9 +449,9 @@ saveAnswerToBackend(questionNumber, answer); // token supplies email
 
   const botMsgs = getBotMessage({ step, answer, justAnswered: true });
   sendBubblesSequentially(botMsgs, "bot", 650, () => {
-    if (answer === "Yes" && questions[step].requirements.length > 0) {
-      setShowUploads(true);
-      } else {
+      if (answer === "Yes" && questions[step].requirements.length > 0) {
+      setShowMultiUpload(true);   // NEW
+         } else {
       setTimeout(() => {
         if (reviewMode) {
           setReviewMode(false);
@@ -533,14 +465,6 @@ saveAnswerToBackend(questionNumber, answer); // token supplies email
   });
   setJustAnswered(true);
 };
-const handleDisagree = (questionNumber) => {
-  setDisagreementCount(prev => {
-    const next = { ...prev, [questionNumber]: (prev[questionNumber] || 0) + 1 };
-    if (next[questionNumber] >= 2) setShowEscalateForm(true);
-    return next;
-  });
-};
-
 if (!user) {
   return (
     <AuthPage
@@ -644,12 +568,12 @@ if (!user) {
   questions={questions}
   onJump={(qIdx, reqIdx) => {
     setStep(qIdx);
-    setUploadReqIdx(reqIdx || 0);
-    setShowUploads(results[qIdx]?.answer === "Yes");
+    setShowMultiUpload(results[qIdx]?.answer === "Yes");
     setShowSummary(false);
     setReviewMode(false);
     setMessages([]);
     setShowProgress(false); // Hide popup after jump
+	setFocusReqIdx(typeof reqIdx === "number" ? reqIdx : null);
   }}
   onClose={() => setShowProgress(false)}
 />
@@ -759,47 +683,39 @@ if (!user) {
   />
 )}
          
-      {/* UPLOAD SECTION */}
-      {showUploads && step < questions.length && (
-        <UploadSection
-  question={questions[step]}
-  requirementIdx={uploadReqIdx}
-  email={user.email}
-  sessionId={sessionId}
-  questionNumber={questions[step].number}
-  setMessages={setMessages}
-  setShowUploads={setShowUploads}
-  setUploadReqIdx={setUploadReqIdx}
-  reviewMode={reviewMode}
-  setReviewMode={setReviewMode}
-  setStep={setStep}
-  setJustAnswered={setJustAnswered}
-  showDisagreeModal={showDisagreeModal}
-  setShowDisagreeModal={setShowDisagreeModal}
-  disagreeReason={disagreeReason}
-  setDisagreeReason={setDisagreeReason}
-  disagreeFile={disagreeFile}
-  setDisagreeFile={setDisagreeFile}
-  disagreeLoading={disagreeLoading}
-  setDisagreeLoading={setDisagreeLoading}
-  results={results}
-  setResults={setResults}
-  uploadedFiles={uploadedFiles}
-  setUploadedFiles={setUploadedFiles}
-  handleQuestionReview={handleQuestionReview}
-/>
-
-
+           {/* MULTI UPLOAD (N docs per question) */}
+      {showMultiUpload && step < questions.length && (
+        <MultiUploadSection
+          question={questions[step]}
+          questionNumber={questions[step].number}
+          sessionId={sessionId}
+          email={user.email}
+          uploadedFiles={uploadedFiles}
+          setUploadedFiles={setUploadedFiles}
+          precheck={precheck}
+          setPrecheck={setPrecheck}
+          auditResult={auditResult}
+          setAuditResult={setAuditResult}
+          setShowMultiUpload={setShowMultiUpload}
+          setMessages={setMessages}
+          setStep={setStep}
+          setJustAnswered={setJustAnswered}
+          reviewMode={reviewMode}
+          setReviewMode={setReviewMode}
+          profile={profile}
+		  results={results}
+          setResults={setResults}
+		  focusReqIdx={focusReqIdx}
+        />
       )}
-
       {/* YES/NO BUTTONS */}
-      {!typing &&
-        !showUploads &&
-        step >= 0 &&
-        step < questions.length &&
-        messages.length > 0 &&
-        !showIntro &&
-		bubblesComplete && (
+            {!typing &&
+			!showMultiUpload &&
+			step >= 0 && step < questions.length &&
+			!answers[step] &&                 // ⬅️ only if not answered yet
+			messages.length > 0 &&
+			!showIntro &&
+			bubblesComplete && (
           <div style={{ marginTop: 16 }}>
             <button
   onClick={() => handleAnswer("Yes")}
@@ -854,453 +770,375 @@ if (!user) {
 
 // --- UPLOAD SECTION ---
 
-function UploadSection({
-  question,
-  requirementIdx,
-  email,
-  sessionId,
+
+function MultiUploadSection({
+  question,                 // { number, text, requirements:[...] }
   questionNumber,
-  setMessages,
-  setShowUploads,
-  setUploadReqIdx,
-  reviewMode,
-  setReviewMode,
-  setStep,
-  setJustAnswered,
-  showDisagreeModal,
-  setShowDisagreeModal,
-  disagreeReason,
-  setDisagreeReason,
-  disagreeFile,
-  setDisagreeFile,
-  disagreeLoading,
-  setDisagreeLoading,  // Use these variables directly instead of local useState
-  results,
-  setResults,
+  sessionId,
+  email,
   uploadedFiles,
   setUploadedFiles,
-  handleQuestionReview  
+  precheck,
+  setPrecheck,
+  auditResult,
+  setAuditResult,
+  setShowMultiUpload,
+  setMessages,
+  setStep,
+  setJustAnswered,
+  reviewMode,
+  setReviewMode,
+  profile,
+  results,                 // NEW
+  setResults,              // NEW
 }) {
-  const requirement = question.requirements[requirementIdx];
-  const [uploading, setUploading] = useState(false);
-  const [uploaded, setUploaded] = useState(false);
-  const [error, setError] = useState("");
-  const [isDragActive, setIsDragActive] = useState(false);
-const [ocrLang, setOcrLang] = useState("eng");
-const [lastFile, setLastFile] = useState(null);
+  const [ocrLang, setOcrLang] = useState("eng");
+  const [paths, setPaths] = useState(() => uploadedFiles[questionNumber] || []); // file paths per requirement
+  const [uploadingIdx, setUploadingIdx] = useState(null);
+  const [localError, setLocalError] = useState("");
+  const [disagreeOpen, setDisagreeOpen] = useState(false);
+const [disagreeReason, setDisagreeReason] = useState("");
 
-
-// *** ADD THIS useEffect ***
+  const reqCount = question?.requirements?.length ?? 0; // can be 0..12+
 useEffect(() => {
-  function onRetryUpload(e) {
-    const pending = e.detail;
-    // Make sure requirement context matches to avoid cross-upload bugs
-    if (
-      pending &&
-      pending.file &&
-      pending.email === email &&
-      pending.questionNumber === questionNumber &&
-      requirement === pending.requirement
-    ) {
-      // Retry the failed upload with the stored file
-      handleUpload({ target: { files: [pending.file] } });
+	if (typeof focusReqIdx === "number") {
+	const el = document.getElementById(`req-slot-${focusReqIdx}`);
+	if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+	}
+	}, [focusReqIdx]);
+  // Ensure we render one slot per requirement (N-file)
+  // Sync paths with any previously uploaded files when revisiting/jumping via Progress
+useEffect(() => {
+  const base = uploadedFiles[questionNumber] || [];
+  const padded = Array.from({ length: reqCount || 0 }, (_, i) => base[i] || "");
+  setPaths(padded);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [questionNumber, reqCount, uploadedFiles]);
+
+
+  const uploadForIndex = async (idx, file) => {
+    setUploadingIdx(idx);
+    setLocalError("");
+    try {
+      const base = `${sessionId}_${email}/question-${questionNumber}`;
+      const filePath = `${base}/req-${idx + 1}-${Date.now()}-${file.name}`;
+      const { error } = await supabase.storage.from("uploads").upload(filePath, file, { upsert: true });
+      if (error) throw error;
+
+      setPaths(prev => {
+        const next = [...prev];
+        next[idx] = filePath;
+        return next;
+      });
+      setUploadedFiles(prev => {
+        const list = Array.isArray(prev[questionNumber]) ? [...prev[questionNumber]] : [];
+        list[idx] = filePath;
+        return { ...prev, [questionNumber]: list };
+      });
+	  setResults(prev => {
+        const next = [...prev];
+        const r = next[questionNumber - 1]?.requirements?.[idx];
+        if (r) next[questionNumber - 1].requirements[idx] = { ...r, aiFeedback: "Uploaded" };
+        return next;
+      });
+
+    } catch (e) {
+      setLocalError(`Upload failed: ${e.message || String(e)}`);
+    } finally {
+      setUploadingIdx(null);
     }
-  }
-  window.addEventListener("vendorIQ:retryUpload", onRetryUpload);
-  return () => window.removeEventListener("vendorIQ:retryUpload", onRetryUpload);
-}, [email, questionNumber, requirement]); // dependencies must match current upload context
+  };
 
+  const clearAll = () => {
+    setPrecheck(null);
+    setAuditResult(null);
+    setPaths(Array.from({ length: reqCount }, () => ""));
+    setUploadedFiles(prev => ({ ...prev, [questionNumber]: [] }));
+  };
 
-// handleUpload
-  const handleUpload = async (e) => {
-  const file = e.target.files[0];
-  setLastFile(file);
-  if (!file) return;
-  setUploading(true);
-  setError("");
+  // 1) PRE-CHECK (AI: are these the *right* docs + suggestions)
+  const runPrecheck = async () => {
+    setLocalError("");
+    try {
+      const files = paths.filter(Boolean);
+      if (files.length === 0) {
+        setLocalError("Please upload at least one file.");
+        return;
+      }
+      const res = await apiFetch(`/api/review-question`, {
+        json: {
+          questionNumber,
+          files,
+          companyProfile: profile || {},
+          ocrLang
+        }
+      });
+      if (!res.ok) throw new Error("Pre-check failed");
+      const data = await res.json(); // { feedback, score }
+      setPrecheck(data);
+      setMessages(prev => [
+        ...prev,
+        { from: "bot", text: `🧪 **Document pre-check (Q${questionNumber}):**\n\n${data.feedback || "No feedback."}` },
+      ]);
+    } catch (e) {
+      setLocalError(e.message || "Pre-check error");
+    }
+  };
 
-  // 1. Upload to Supabase
-  const filePath = `${sessionId}_${email}/question-${questionNumber}/requirement-${requirementIdx + 1}-${file.name}`;
-  const { error: uploadError } = await supabase.storage.from("uploads").upload(filePath, file, { upsert: true });
-  if (uploadError) {
-    setUploading(false);
-    setError("Upload failed: " + uploadError.message);
-    return;
-  }
-  setUploadedFiles(prev => {
-  const updated = { ...prev };
-  const currentFiles = updated[questionNumber] ? [...updated[questionNumber]] : [];
-  if (!currentFiles.includes(filePath)) {
-    currentFiles.push(filePath);
-  }
-  updated[questionNumber] = currentFiles;
-  return updated;
-});
-// mark this requirement as uploaded so Progress shows "Uploaded"
-  setResults(prev => {
-    const next = [...prev];
-    const r = next[questionNumber - 1].requirements[requirementIdx];
-    next[questionNumber - 1].requirements[requirementIdx] = {
-      ...r,
-      aiFeedback: "Uploaded"
-    };
-    return next;
-  });
-  setUploaded(true);
-  setUploading(false);
-};
+  // 2) AUDIT (final review) – proceed even if pre-check wasn't perfect
+  const runAudit = async () => {
+    setLocalError("");
+    try {
+      const files = paths.filter(Boolean);
+      if (files.length === 0) {
+        setLocalError("Please upload at least one file.");
+        return;
+      }
+      const res = await apiFetch(`/api/review-question`, {
+        json: {
+          questionNumber,
+          files,
+          companyProfile: profile || {},
+          ocrLang
+        }
+      });
+      if (!res.ok) throw new Error("Audit failed");
+      const data = await res.json(); // { feedback, score }
+      setAuditResult(data);
+	    setResults(prev => {
+        const next = [...prev];
+        next[questionNumber - 1] = {
+          ...next[questionNumber - 1],
+          questionScore: data.score ?? null,
+          questionFeedback: data.feedback || ""
+        };
+        return next;
+      });
 
-const handleAccept = () => {
-  // If there are more requirements for this question, go to the next requirement
-  if (requirementIdx < question.requirements.length - 1) {
-    setUploadReqIdx(requirementIdx + 1);    // Move to next requirement
-    setUploaded(false);                     // Reset upload for new requirement       
-    // Do NOT hide the uploads section
-  } else {
-    // All requirements done, move to next question
-    handleQuestionReview(questionNumber, ocrLang);
-  }
-};
+      setMessages(prev => [
+        ...prev,
+        { from: "bot", text: `🧠 **AI Audit (Q${questionNumber}):**\n\n${data.feedback || "No feedback."}` },
+      ]);
+    } catch (e) {
+      setLocalError(e.message || "Audit error");
+    }
+  };
 
-const submitDisagreement = async () => {
-  setDisagreeLoading(true);
+  // 3) User agrees – advance to next question
+  const agreeAndNext = () => {
+    setShowMultiUpload(false);
+    setPrecheck(null);
+    setAuditResult(null);
+    setJustAnswered(false);
+    if (reviewMode) {
+      setReviewMode(false);
+      setStep(questions.length);
+    } else {
+      setStep(prev => prev + 1);
+    }
+  };
 
-  try {
-  const formData = new FormData();
-  // no email in body; backend will set req.body.email from token
-  formData.append("questionNumber", questionNumber);
-  formData.append("requirement", requirement);
-  formData.append("disagreeReason", disagreeReason);
-  formData.append("ocrLang", ocrLang);
-  if (disagreeFile) {
-    formData.append("file", disagreeFile);
-  }
+  // 4) Disagree flow: request reconsideration + increment/possibly escalate
+  const submitDisagree = async () => {
+    if (!disagreeReason.trim()) return;
+    try {
+      // a) AI reconsideration message
+      const fd = new FormData();
+      fd.append("questionNumber", String(questionNumber));
+      fd.append("requirement", `Question ${questionNumber} overall audit`);
+      fd.append("disagreeReason", disagreeReason);
+      fd.append("ocrLang", ocrLang);
+      const ai = await apiFetch(`/api/disagree-feedback`, { formData: fd });
+      const aiJson = await ai.json();
+      setMessages(prev => [
+        ...prev,
+        { from: "bot", text: `🧠 **AI reconsideration:**\n\n${aiJson?.feedback || "No new feedback."}` },
+      ]);
 
-  const res = await apiFetch(`/api/disagree-feedback`, {
-    formData
-  });
-
-
-    const result = await res.json();
-    setMessages(prev => [
-      ...prev,
-      {
-        from: "bot",
-        text: `🧠 Re-evaluated AI Feedback:\n\n${result.feedback || "No new feedback returned."}`,
-      },
-    ]);
-
-    setShowDisagreeModal(false);
-    setDisagreeReason("");
-    setDisagreeFile(null);
-    // --- DO NOT advance to next requirement ---
-    // --- Instead, keep user on this requirement, let them Accept, Re-upload, or Disagree again ---
-  } catch (err) {
-    setMessages(prev => [
-      ...prev,
-      {
-        from: "bot",
-        text: `❌ Failed to reprocess disagreement: ${err.message}`,
-      },
-    ]);
-  }
-
-  setDisagreeLoading(false);
-}
-
-return (
-  <div>
-    {/* Disagree Modal is rendered globally so it's always available */}
-    {showDisagreeModal && (
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          width: "100vw",
-          height: "100vh",
-          background: "rgba(0,0,0,0.4)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 999,
-        }}
-      >
-        <form
-          onSubmit={e => {
-            e.preventDefault();
-            if (!disagreeReason.trim()) return;
-            submitDisagreement();
-          }}
-          style={{
-            background: "#fff",
-            borderRadius: 18,
-            padding: "30px 32px 24px 32px",
-            maxWidth: 420,
-            width: "92%",
-            boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
-            <span style={{ fontSize: 26, color: "#d32f2f", marginRight: 10 }}>❓</span>
-            <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "#d32f2f" }}>
-              Disagree with AI Feedback
-            </span>
-          </div>
-          <label htmlFor="disagree-reason" style={{ fontWeight: 500, marginBottom: 2 }}>
-            Your reason or argument <span style={{ color: "#d32f2f" }}>*</span>
-          </label>
-          <textarea
-            id="disagree-reason"
-            placeholder="Clearly state your reason for disagreement, with facts or references if possible..."
-            value={disagreeReason}
-            onChange={e => setDisagreeReason(e.target.value)}
-            style={{
-              width: "95%",
-              minHeight: 80,
-              resize: "vertical",
-              fontSize: "0.9rem",
-              padding: "10px",
-              borderRadius: 7,
-              border: "1.5px solid #e0e0e0",
-            }}
-            required
-          />
-          <label
-            htmlFor="disagree-file"
-            style={{
-              display: "inline-block",
-              background: "#e3f2fd",
-              color: "#333",
-              fontWeight: 500,
-              borderRadius: 7,
-              padding: "8px 22px",
-              cursor: "pointer",
-              boxShadow: "0 1px 4px #0001",
-              transition: "background 0.2s",
-              border: "1.5px solid #e0e0e0",
-              marginTop: 2,
-              marginBottom: 4,
-            }}
-          >
-            📁 Upload File
-            <input
-              id="disagree-file"
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
-              onChange={e => setDisagreeFile(e.target.files[0])}
-              style={{ display: "none" }}
-            />
-          </label>
-          <span style={{ marginLeft: 8, color: "#777", fontSize: "0.90rem" }}>
-            {disagreeFile ? disagreeFile.name : "No file chosen"}
-          </span>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 }}>
-            <button
-              type="button"
-              onClick={() => setShowDisagreeModal(false)}
-              style={{
-                background: "#f5f5f5",
-                color: "#666",
-                border: "none",
-                borderRadius: 8,
-                padding: "8px 22px",
-                fontSize: "0.9rem",
-                fontWeight: 500,
-                cursor: "pointer",
-              }}
-              disabled={disagreeLoading}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              style={{
-                background: "#d32f2f",
-                color: "#fff",
-                border: "none",
-                borderRadius: 8,
-                padding: "8px 22px",
-                fontSize: "0.9rem",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-              disabled={disagreeLoading || !disagreeReason.trim()}
-            >
-              {disagreeLoading ? "Submitting..." : "Submit"}
-            </button>
-          </div>
-        </form>
-      </div>
-    )}
-
-    {/* Main upload UI */}
-    {!uploaded && !uploading && (
-      <div
-        onDragOver={e => {
-          e.preventDefault();
-          setIsDragActive(true);
-        }}
-        onDragLeave={e => {
-          e.preventDefault();
-          setIsDragActive(false);
-        }}
-        onDrop={e => {
-          e.preventDefault();
-          setIsDragActive(false);
-          const file = e.dataTransfer.files && e.dataTransfer.files[0];
-          if (file) {
-            handleUpload({ target: { files: [file] } });
+      // b) count attempt & maybe escalate (server enforces the 2x limit)
+      const ctr = await apiFetch(`/api/audit/${questionNumber}/disagree`, {
+        json: { userArgument: disagreeReason }
+      });
+      const cJson = await ctr.json(); // { escalated, remainingAppeals }
+      if (cJson.escalated) {
+        setMessages(prev => [
+          ...prev,
+          { from: "bot", text: "🚩 Escalated to Human Auditor. We’ll continue; they will finalize later." },
+        ]);
+        setDisagreeOpen(false);
+		        setResults(prev => {
+          const next = [...prev];
+          if (next[questionNumber - 1]) {
+            next[questionNumber - 1].questionScore = null;
+            next[questionNumber - 1].questionFeedback = "Pending Human Auditor";
           }
-        }}
-        style={{
-          border: isDragActive
-            ? "2.8px solid #4f5963"
-            : "1px dashed #72818f",
-          background: isDragActive
-            ? "#72818f"
-            : "#4f5963",
-          borderRadius: 22,
-          padding: "20px 0 30px 0",
-          margin: "20px 0",
-          minHeight: 134,
-          maxWidth: 500,
-          textAlign: "center",
-          transition: "all 0.17s",
-          boxShadow: isDragActive
-            ? "0 4px 18px #229cf930"
-            : "0 2px 10px #b6d9fc30",
-          cursor: "pointer",
-          display: uploaded ? "none" : "block",
-          position: "relative",
-        }}
-      >
-        <div
-          style={{
-            fontSize: "0.9rem",
-            fontWeight: 700,
-            color: "#0085CA",
-          }}
-        >
-          Requirement {requirementIdx + 1}: {requirement}
-        </div>
-        <div style={{ fontWeight: 600, color: "#999", fontSize: "0.70rem", marginTop: "10px", marginBottom: "10px" }}>
-          {isDragActive
-            ? "Drop your file here..."
-            : "Drag & drop a file here, or click Browse File below"}
-        </div>
-        <div
-          style={{
-            margin: "10px auto 0 auto",
-            color: "#0085CA",
-            fontSize: "0.90rem",
-            fontWeight: 400,
-            maxWidth: 400,
-            padding: "20px 0",
-            marginBottom: "40px",
-          }}
-        >
-        </div>
-        <div style={{ marginBottom: 10 }}>
-  <label htmlFor="ocr-lang" style={{ marginRight: 8, fontWeight: 500, color: "#0085CA" }}>
-    Select language for document text:
-  </label>
-  <select
-    id="ocr-lang"
-    value={ocrLang}
-    onChange={e => setOcrLang(e.target.value)}
-    style={{
-      border: "1.5px solid #b3d6f8",
-      borderRadius: 7,
-      padding: "3px 12px",
-      fontSize: "0.9rem",
-      color: "#333",
-    }}
-  >
-    <option value="eng">English</option>
-    <option value="ind">Bahasa Indonesia</option>
-    <option value="vie">Vietnamese</option>
-    <option value="tha">Thai</option>
-    {/* Add more as needed */}
-  </select>
-</div>
+          return next;
+        });
+        agreeAndNext();
+        return;
+      } else {
+        setMessages(prev => [
+          ...prev,
+          { from: "bot", text: `ℹ️ You have ${cJson.remainingAppeals ?? 1} disagreement attempt(s) left for this question.` },
+        ]);
+      }
+    } catch (e) {
+      setLocalError(`Disagree error: ${e.message || String(e)}`);
+    } finally {
+      setDisagreeOpen(false);
+      setDisagreeReason("");
+    }
+  };
 
-        <label className="browse-btn" style={{ marginTop: 12 }}>
-          📁 Browse File
-          <input
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
-            onChange={handleUpload}
-            disabled={uploading}
-            hidden
-          />
+  const atLeastOneFile = paths.some(Boolean);
+
+  return (
+    <div style={{ margin: "18px 0 10px 0" }}>
+      {/* OCR language */}
+      <div style={{ marginBottom: 10 }}>
+        <label htmlFor="ocr-lang" style={{ marginRight: 8, fontWeight: 500, color: "#0085CA" }}>
+          OCR language:
         </label>
-        <button
-          className="skip-btn"
-          onClick={() => {
-            setResults(prev => {
-              const updated = [...prev];
-              updated[questionNumber - 1].requirements[requirementIdx] = {
-                aiScore: null,
-                aiFeedback: "Skipped"
-              };
-              return updated;
-            });
-            setUploaded(true);
-          }}
-          disabled={uploading}
+        <select
+          id="ocr-lang"
+          value={ocrLang}
+          onChange={e => setOcrLang(e.target.value)}
+          style={{ border: "1.5px solid #b3d6f8", borderRadius: 7, padding: "3px 12px", fontSize: "0.9rem" }}
         >
-          ⏭️ Skip Requirement
-        </button>
+          <option value="eng">English</option>
+          <option value="ind">Bahasa Indonesia</option>
+          <option value="vie">Vietnamese</option>
+          <option value="tha">Thai</option>
+        </select>
       </div>
-    )}
 
+      {/* N pickers (one per requirement). If a question has 12, you’ll see 12 inputs */}
+      <div style={{ display: "grid", gap: 10 }}>
+        {Array.from({ length: Math.max(1, reqCount || 1) }).map((_, idx) => (
+  <div key={idx} id={`req-slot-${idx}`} style={{ display: "grid", gap: 6 }}>
+    <div style={{ color: "#bfe3ff", fontSize: "0.85rem" }}>
+      <strong>Requirement {idx + 1}:</strong>{" "}
+      {question?.requirements?.[idx] || "Additional document"}
+    </div>
+    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+      <label className="browse-btn">
+        📄 Choose File
+        <input
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
+          hidden
+          onChange={e => {
+            const f = e.target.files?.[0];
+            if (f) uploadForIndex(idx, f);
+          }}
+          disabled={uploadingIdx === idx}
+        />
+      </label>
+      <span style={{ color: "#fff" }}>
+        {paths[idx] ? paths[idx].split("/").pop() : "No file chosen"}
+      </span>
+    </div>
+  </div>
+))}
 
-    {uploaded && (
-      <div className="button-group">
-        <button className="continue-btn" onClick={handleAccept}>
-          ✅ Accept & Continue
-        </button>
-        <button className="upload-btn" onClick={() => setUploaded(false)}>
-          📄 Re-upload
-        </button>
-        <button className="disagree-btn" onClick={() => setShowDisagreeModal(true)}>
-          ❓ Disagree
-        </button>
       </div>
-    )}
-    {uploading && <HourglassLoader />}
-    {error && (
-  <div style={{ color: "red", marginTop: 12 }}>
-    {error}
-    {error.includes("AI review failed") && lastFile && (
-      <button
-        onClick={() => handleUpload({ target: { files: [lastFile] } })}
-        disabled={uploading}
-		style={{
-          marginLeft: 14,
-          background: "#0085CA",
-          color: "#fff",
-          border: "none",
-          borderRadius: 7,
-          padding: "7px 18px",
-          fontWeight: 600,
-          fontSize: "1.01rem",
-          cursor: uploading ? "not-allowed" : "pointer",
-          opacity: uploading ? 0.6 : 1,
-        }}
-      >
-        Retry AI Review
-      </button>
-    )}
-  </div>
-)}
 
-  </div>
-);
+      {/* Before pre-check */}
+      {!precheck && !auditResult && (
+        <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+          <button className="continue-btn" onClick={runPrecheck} disabled={!atLeastOneFile}>
+            🔍 Validate Documents
+          </button>
+          <button className="upload-btn" onClick={clearAll}>♻️ Clear All</button>
+          <button
+            className="disagree-btn"
+            onClick={() => { setPrecheck(null); setAuditResult(null); setShowMultiUpload(false); }}
+          >
+            ✖ Close
+          </button>
+        </div>
+      )}
+
+      {/* After pre-check: show suggestions + branch */}
+      {precheck && !auditResult && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ color: "#fff", marginBottom: 8 }}>
+            <ReactMarkdown>{precheck.feedback || ""}</ReactMarkdown>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button className="continue-btn" onClick={runAudit}>
+              ▶ Continue to Audit
+            </button>
+            <button className="upload-btn" onClick={clearAll}>
+              📤 Re-upload
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* After audit: agree / retry / disagree */}
+      {auditResult && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ color: "#157A4A", fontWeight: 700, marginBottom: 8 }}>
+            Proposed score: {auditResult.score ?? "-"} / 5
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button className="continue-btn" onClick={agreeAndNext}>✅ Agree & Continue</button>
+            <button className="upload-btn" onClick={() => { setAuditResult(null); setPrecheck(null); }}>
+              ♻️ Re-upload & Retry Q{questionNumber}
+            </button>
+            <button className="disagree-btn" onClick={() => setDisagreeOpen(true)}>❓ Disagree</button>
+          </div>
+
+          {/* Disagree modal */}
+          {disagreeOpen && (
+            <div
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(0,0,0,0.4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 9999,
+              }}
+            >
+              <div style={{ background: "#fff", borderRadius: 12, padding: 18, width: 420 }}>
+                <div style={{ fontWeight: 700, color: "#d32f2f", marginBottom: 8 }}>
+                  Disagree with AI feedback
+                </div>
+                <textarea
+                  placeholder="Explain your disagreement with facts or references..."
+                  value={disagreeReason}
+                  onChange={e => setDisagreeReason(e.target.value)}
+                  style={{
+                    width: "100%",
+                    minHeight: 90,
+                    border: "1.5px solid #e0e0e0",
+                    borderRadius: 8,
+                    padding: 8,
+                    fontSize: "0.9rem",
+                  }}
+                />
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
+                  <button className="upload-btn" onClick={() => setDisagreeOpen(false)}>Cancel</button>
+                  <button
+                    className="disagree-btn"
+                    onClick={submitDisagree}
+                    disabled={!disagreeReason.trim()}
+                  >
+                    Submit
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {localError && <div style={{ color: "red", marginTop: 10 }}>{localError}</div>}
+    </div>
+  );
 }
 
 function cleanSummary(summary) {
@@ -1337,18 +1175,6 @@ function cleanSummary(summary) {
 }
 
 function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
-	const thStyle = {
-  padding: "7px 8px",
-  background: "#e7f4fc",
-  borderBottom: "2px solid #b3d6f8",
-  fontWeight: 700,
-  textAlign: "left"
-};
-const tdStyle = {
-  padding: "6px 8px",
-  borderBottom: "1px solid #dbeefd",
-  verticalAlign: "top"
-};
 const cleanedSummary = cleanSummary(summary);
   
   
@@ -1390,6 +1216,25 @@ const cleanedSummary = cleanSummary(summary);
         <h3 style={{ color: "#0085CA", marginTop: 0 }}>
           <span role="img" aria-label="report">📝</span> Compliance Report Card
         </h3>
+		{breakdown?.some(row =>
+  Array.isArray(row.requirementScores)
+    ? row.requirementScores.some(s => s == null)
+    : row.questionScore == null
+) && (
+  <div style={{
+    background: "#fff7e6",
+    border: "1px solid #ffe8b3",
+    color: "#ad6800",
+    borderRadius: 6,
+    padding: "8px 12px",
+    margin: "8px 0 14px 0",
+    fontSize: "0.85rem",
+    fontWeight: 600
+  }}>
+    Some scores are pending Human Auditor review. Your report will auto-update once finalized.
+  </div>
+)}
+
                 <table style={{ width: "100%", marginBottom: 16, borderCollapse: "collapse", background: "#f3f4f6", fontSize: "0.7rem" }}>
           <thead>
             <tr style={{ background: "#f0faff" }}>
@@ -1414,7 +1259,7 @@ const cleanedSummary = cleanSummary(summary);
                 ? questions[qIdx].requirements[reqIdx].slice(0, 38) + "..."
                 : "-"}
             </td>
-            <td>{scoreVal != null ? `${scoreVal}/5` : "-"}</td>
+             <td>{scoreVal != null ? `${scoreVal}/5` : "— (Pending auditor)"}</td>
             <td>
               {row.upload_feedback && Array.isArray(row.upload_feedback)
                 ? (row.upload_feedback[reqIdx] || "-").slice(0, 48)
