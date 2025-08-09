@@ -15,6 +15,37 @@ const supabase = createClient(
   process.env.REACT_APP_SUPABASE_URL,
   process.env.REACT_APP_SUPABASE_ANON_KEY
 );
+// Attach Supabase access token automatically to API requests
+async function getAccessToken() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token || "";
+}
+
+async function apiFetch(
+  path,
+  { method = "POST", json, formData, headers = {} } = {}
+) {
+  const token = await getAccessToken();
+  const allHeaders = { ...headers, Authorization: `Bearer ${token}` };
+
+  if (json) {
+    allHeaders["Content-Type"] = "application/json";
+    return fetch(`${BACKEND_URL}${path}`, {
+      method,
+      headers: allHeaders,
+      body: JSON.stringify(json),
+    });
+  }
+  if (formData) {
+    // don't set Content-Type for FormData
+    return fetch(`${BACKEND_URL}${path}`, {
+      method,
+      headers: allHeaders,
+      body: formData,
+    });
+  }
+  return fetch(`${BACKEND_URL}${path}`, { method, headers: allHeaders });
+}
 
 // --- CONSTANTS ---
 const botAvatar = process.env.PUBLIC_URL + "/bot-avatar.png";
@@ -152,19 +183,10 @@ function ChatApp() {
 
 const handleQuestionReview = async (questionNumber, ocrLang = "eng") => {
   const files = uploadedFiles[questionNumber] || [];
-  try {
-    const response = await fetch(`${BACKEND_URL}/api/review-question`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: user.email,
-        questionNumber,
-        files,
-        companyProfile: profile,
-		ocrLang
-      })
-    });
-
+try {
+  const response = await apiFetch(`/api/review-question`, {
+    json: { questionNumber, files, companyProfile: profile, ocrLang }
+  });
     if (!response.ok) throw new Error("AI review failed");
     const data = await response.json();
 
@@ -239,12 +261,11 @@ const handleQuestionReview = async (questionNumber, ocrLang = "eng") => {
 async function fetchSummary() {
         setTyping(true);
         setTypingText("Generating assessment summary...");
-        try {
-          const response = await fetch(`${BACKEND_URL}/api/session-summary`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: user.email, sessionId }),
-          });
+try {
+  const response = await apiFetch(`/api/session-summary`, {
+    json: {} // backend will inject email from token
+  });
+
           const result = await response.json();
 		  
 		  console.log("Session summary API response:", result);
@@ -426,14 +447,14 @@ useEffect(() => {
       "Let's move on to the next question.",
     ];
   }
+
 // --- Save answer to backend ---
-const saveAnswerToBackend = async (email, questionNumber, answer) => {
+const saveAnswerToBackend = async (questionNumber, answer) => {
   try {
-    await fetch(`${BACKEND_URL}/api/save-answer`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email.trim().toLowerCase(), questionNumber, answer })
+    await apiFetch(`/api/save-answer`, {
+      json: { questionNumber, answer }
     });
+
  } catch (err) {
     console.error("Failed to save answer:", err);
   }
@@ -491,7 +512,8 @@ const saveAnswerToBackend = async (email, questionNumber, answer) => {
       : res
   ));
   const questionNumber = questions[step].number;
-  saveAnswerToBackend(user.email, questionNumber, answer); // 🧠 Send to backend!
+saveAnswerToBackend(questionNumber, answer); // token supplies email
+
 
   const botMsgs = getBotMessage({ step, answer, justAnswered: true });
   sendBubblesSequentially(botMsgs, "bot", 650, () => {
@@ -898,7 +920,7 @@ useEffect(() => {
   setError("");
 
   // 1. Upload to Supabase
-  const filePath = `uploads/${sessionId}_${email}/question-${questionNumber}/requirement-${requirementIdx + 1}-${file.name}`;
+  const filePath = `${sessionId}_${email}/question-${questionNumber}/requirement-${requirementIdx + 1}-${file.name}`;
   const { error: uploadError } = await supabase.storage.from("uploads").upload(filePath, file, { upsert: true });
   if (uploadError) {
     setUploading(false);
@@ -944,20 +966,20 @@ const submitDisagreement = async () => {
   setDisagreeLoading(true);
 
   try {
-    const formData = new FormData();
-    formData.append("email", email);
-    formData.append("questionNumber", questionNumber);
-    formData.append("requirement", requirement);
-    formData.append("disagreeReason", disagreeReason);
-	formData.append("ocrLang", ocrLang);
-    if (disagreeFile) {
-      formData.append("file", disagreeFile);
-    }
+  const formData = new FormData();
+  // no email in body; backend will set req.body.email from token
+  formData.append("questionNumber", questionNumber);
+  formData.append("requirement", requirement);
+  formData.append("disagreeReason", disagreeReason);
+  formData.append("ocrLang", ocrLang);
+  if (disagreeFile) {
+    formData.append("file", disagreeFile);
+  }
 
-    const res = await fetch(`${BACKEND_URL}/api/disagree-feedback`, {
-      method: "POST",
-      body: formData,
-    });
+  const res = await apiFetch(`/api/disagree-feedback`, {
+    formData
+  });
+
 
     const result = await res.json();
     setMessages(prev => [
