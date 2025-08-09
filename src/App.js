@@ -865,7 +865,7 @@ useEffect(() => {
   };
 
   // 1) PRE-CHECK (AI: are these the *right* docs + suggestions)
-  cconst runPrecheck = async () => {
+  const runPrecheck = async () => {
   setLocalError("");
   try {
     // Require at least the first 2 required files (Q1 has 2)
@@ -1006,7 +1006,7 @@ useEffect(() => {
     }
   };
 
-  const atLeastOneFile = paths.some(Boolean);
+  const haveFirstTwo = Boolean(paths[0] && paths[1]);
 
   return (
     <div style={{ margin: "18px 0 10px 0" }}>
@@ -1041,7 +1041,7 @@ useEffect(() => {
         📄 Choose File
         <input
           type="file"
-          accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
+          accept=".pdf,.jpg,.jpeg,.png,.docx,.txt"
           hidden
           onChange={e => {
             const f = e.target.files?.[0];
@@ -1062,9 +1062,9 @@ useEffect(() => {
       {/* Before pre-check */}
       {!precheck && !auditResult && (
         <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
-          <button className="continue-btn" onClick={runPrecheck} disabled={!atLeastOneFile}>
-            🔍 Validate Documents
-          </button>
+          <button className="continue-btn" onClick={runPrecheck} disabled={!haveFirstTwo}>
+  🔍 Validate Documents
+</button>
           <button className="upload-btn" onClick={clearAll}>♻️ Clear All</button>
           <button
             className="disagree-btn"
