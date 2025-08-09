@@ -1,0 +1,102 @@
+| table_name            | column_name             | data_type                   | is_nullable | column_default                               |
+| --------------------- | ----------------------- | --------------------------- | ----------- | -------------------------------------------- |
+| answers               | id                      | uuid                        | NO          | gen_random_uuid()                            |
+| answers               | question_number         | smallint                    | NO          | null                                         |
+| answers               | answer                  | text                        | YES         | null                                         |
+| answers               | timestamp               | timestamp without time zone | YES         | null                                         |
+| answers               | email                   | text                        | NO          | null                                         |
+| answers               | upload_feedback         | text                        | YES         | null                                         |
+| answers               | skip_reason             | text                        | YES         | null                                         |
+| answers               | updated_at              | timestamp without time zone | YES         | null                                         |
+| answers               | status                  | text                        | YES         | 'pending'::text                              |
+| answers               | review_mode             | boolean                     | YES         | false                                        |
+| answers               | r1_path                 | text                        | YES         | null                                         |
+| answers               | r2_path                 | text                        | YES         | null                                         |
+| answers               | validation_status       | text                        | YES         | 'pending'::text                              |
+| answers               | validation_feedback     | text                        | YES         | null                                         |
+| answers               | ai_score                | numeric                     | YES         | null                                         |
+| answers               | final_score             | numeric                     | YES         | null                                         |
+| answers               | user_disagreement_count | integer                     | YES         | 0                                            |
+| answers               | escalated               | boolean                     | YES         | false                                        |
+| answers               | created_at              | timestamp with time zone    | YES         | now()                                        |
+| audit_logs            | id                      | uuid                        | NO          | gen_random_uuid()                            |
+| audit_logs            | email                   | text                        | NO          | null                                         |
+| audit_logs            | question_number         | integer                     | NO          | null                                         |
+| audit_logs            | action                  | text                        | NO          | null                                         |
+| audit_logs            | old_score               | text                        | YES         | null                                         |
+| audit_logs            | new_score               | text                        | YES         | null                                         |
+| audit_logs            | comment                 | text                        | YES         | null                                         |
+| audit_logs            | auditor                 | text                        | YES         | null                                         |
+| audit_logs            | created_at              | timestamp with time zone    | YES         | now()                                        |
+| auditor_help_requests | id                      | bigint                      | NO          | null                                         |
+| auditor_help_requests | created_at              | timestamp with time zone    | NO          | now()                                        |
+| auditor_help_requests | email                   | text                        | YES         | null                                         |
+| auditor_help_requests | question_number         | smallint                    | YES         | null                                         |
+| auditor_help_requests | requirement             | text                        | YES         | null                                         |
+| auditor_help_requests | file_path               | text                        | YES         | null                                         |
+| auditor_help_requests | auditor_message         | text                        | YES         | null                                         |
+| auditor_help_requests | status                  | text                        | YES         | null                                         |
+| auditor_requests      | id                      | integer                     | NO          | nextval('auditor_requests_id_seq'::regclass) |
+| auditor_requests      | session_id              | uuid                        | YES         | null                                         |
+| auditor_requests      | email                   | text                        | NO          | null                                         |
+| auditor_requests      | question_number         | integer                     | NO          | null                                         |
+| auditor_requests      | requirement             | text                        | YES         | null                                         |
+| auditor_requests      | user_argument           | text                        | YES         | null                                         |
+| auditor_requests      | user_file_url           | text                        | YES         | null                                         |
+| auditor_requests      | ai_feedback             | text                        | YES         | null                                         |
+| auditor_requests      | ai_disagree_feedback    | text                        | YES         | null                                         |
+| auditor_requests      | status                  | text                        | YES         | 'pending'::text                              |
+| auditor_requests      | auditor_comment         | text                        | YES         | null                                         |
+| auditor_requests      | auditor_score           | text                        | YES         | null                                         |
+| auditor_requests      | created_at              | timestamp with time zone    | NO          | now()                                        |
+| auditor_requests      | resolved_at             | timestamp with time zone    | YES         | null                                         |
+| disagreements         | id                      | integer                     | NO          | nextval('disagreements_id_seq'::regclass)    |
+| disagreements         | email                   | text                        | NO          | null                                         |
+| disagreements         | question_number         | integer                     | NO          | null                                         |
+| disagreements         | requirement             | text                        | YES         | null                                         |
+| disagreements         | disagree_reason         | text                        | YES         | null                                         |
+| disagreements         | ai_feedback             | text                        | YES         | null                                         |
+| disagreements         | created_at              | timestamp with time zone    | NO          | now()                                        |
+| disagreements         | file_url                | text                        | YES         | null                                         |
+| disagreements         | session_id              | uuid                        | YES         | null                                         |
+| disagreements         | round                   | integer                     | YES         | null                                         |
+| disagreements         | resolved                | boolean                     | YES         | false                                        |
+| profiles              | id                      | uuid                        | NO          | null                                         |
+| profiles              | email                   | text                        | YES         | null                                         |
+| profiles              | role                    | text                        | YES         | 'supplier'::text                             |
+| profiles              | company_name            | text                        | YES         | null                                         |
+| profiles              | country                 | text                        | YES         | null                                         |
+| profiles              | country_code            | text                        | YES         | null                                         |
+| profiles              | location_id             | text                        | YES         | null                                         |
+| profiles              | customer_unit           | text                        | YES         | null                                         |
+| profiles              | market_area             | text                        | YES         | null                                         |
+| responses             | id                      | uuid                        | NO          | gen_random_uuid()                            |
+| responses             | supplier_email          | text                        | NO          | null                                         |
+| responses             | question_index          | smallint                    | YES         | null                                         |
+| responses             | answer                  | text                        | YES         | null                                         |
+| responses             | score                   | smallint                    | YES         | null                                         |
+| responses             | submitted_at            | timestamp without time zone | YES         | null                                         |
+| reviews               | id                      | uuid                        | NO          | gen_random_uuid()                            |
+| reviews               | email                   | text                        | NO          | null                                         |
+| reviews               | session_id              | text                        | NO          | null                                         |
+| reviews               | question_number         | integer                     | NO          | null                                         |
+| reviews               | score                   | integer                     | YES         | null                                         |
+| reviews               | feedback                | text                        | YES         | null                                         |
+| reviews               | upload_feedback         | jsonb                       | YES         | null                                         |
+| reviews               | requirement_scores      | jsonb                       | YES         | null                                         |
+| reviews               | created_at              | timestamp with time zone    | YES         | now()                                        |
+| sessions              | id                      | uuid                        | NO          | gen_random_uuid()                            |
+| sessions              | email                   | text                        | YES         | null                                         |
+| sessions              | current_question        | smallint                    | YES         | null                                         |
+| sessions              | status                  | text                        | YES         | null                                         |
+| sessions              | gemini_summary          | text                        | YES         | null                                         |
+| sessions              | gemini_score            | smallint                    | YES         | null                                         |
+| sessions              | created_at              | timestamp without time zone | YES         | null                                         |
+| sessions              | updated_at              | timestamp without time zone | YES         | null                                         |
+| supplier_names        | email                   | text                        | NO          | null                                         |
+| supplier_names        | supplier_name           | text                        | NO          | null                                         |
+| supplier_names        | extracted_at            | timestamp with time zone    | YES         | now()                                        |
+| uploaded_files        | session_id              | uuid                        | NO          | gen_random_uuid()                            |
+| uploaded_files        | question_number         | smallint                    | NO          | null                                         |
+| uploaded_files        | file_name               | text                        | YES         | null                                         |
+| uploaded_files        | file_url                | text                        | YES         | null                                         |

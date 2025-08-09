@@ -1,0 +1,22 @@
+| table_name            | index_name                                   | definition                                                                                                                          |
+| --------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| answers               | answers_email_qno_key                        | CREATE UNIQUE INDEX answers_email_qno_key ON public.answers USING btree (email, question_number)                                    |
+| answers               | answers_email_question_key                   | CREATE UNIQUE INDEX answers_email_question_key ON public.answers USING btree (email, question_number)                               |
+| answers               | answers_pkey                                 | CREATE UNIQUE INDEX answers_pkey ON public.answers USING btree (id)                                                                 |
+| answers               | idx_answers_email_q                          | CREATE INDEX idx_answers_email_q ON public.answers USING btree (email, question_number)                                             |
+| answers               | unique_email_question                        | CREATE UNIQUE INDEX unique_email_question ON public.answers USING btree (email, question_number)                                    |
+| audit_logs            | audit_logs_pkey                              | CREATE UNIQUE INDEX audit_logs_pkey ON public.audit_logs USING btree (id)                                                           |
+| audit_logs            | idx_audit_logs_email_q                       | CREATE INDEX idx_audit_logs_email_q ON public.audit_logs USING btree (email, question_number)                                       |
+| auditor_help_requests | auditor_help_requests_pkey                   | CREATE UNIQUE INDEX auditor_help_requests_pkey ON public.auditor_help_requests USING btree (id)                                     |
+| auditor_requests      | auditor_requests_pkey                        | CREATE UNIQUE INDEX auditor_requests_pkey ON public.auditor_requests USING btree (id)                                               |
+| disagreements         | disagreements_pkey                           | CREATE UNIQUE INDEX disagreements_pkey ON public.disagreements USING btree (id)                                                     |
+| disagreements         | idx_disagreements_email_q                    | CREATE INDEX idx_disagreements_email_q ON public.disagreements USING btree (email, question_number)                                 |
+| profiles              | profiles_email_key                           | CREATE UNIQUE INDEX profiles_email_key ON public.profiles USING btree (email)                                                       |
+| profiles              | profiles_pkey                                | CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id)                                                               |
+| responses             | responses_pkey                               | CREATE UNIQUE INDEX responses_pkey ON public.responses USING btree (id)                                                             |
+| reviews               | reviews_email_session_id_question_number_key | CREATE UNIQUE INDEX reviews_email_session_id_question_number_key ON public.reviews USING btree (email, session_id, question_number) |
+| reviews               | reviews_pkey                                 | CREATE UNIQUE INDEX reviews_pkey ON public.reviews USING btree (id)                                                                 |
+| sessions              | sessions_pkey                                | CREATE UNIQUE INDEX sessions_pkey ON public.sessions USING btree (id)                                                               |
+| supplier_names        | supplier_names_pkey                          | CREATE UNIQUE INDEX supplier_names_pkey ON public.supplier_names USING btree (email)                                                |
+| uploaded_files        | uploaded_files_pkey                          | CREATE UNIQUE INDEX uploaded_files_pkey ON public.uploaded_files USING btree (session_id)                                           |
+| uploads               | uploads_pkey                                 | CREATE UNIQUE INDEX uploads_pkey ON public.uploads USING btree (id)                                                                 |

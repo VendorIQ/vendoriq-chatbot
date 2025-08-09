@@ -1,0 +1,3 @@
+| table_name | trigger_name   | action_timing | event  | action_statement                            |
+| ---------- | -------------- | ------------- | ------ | ------------------------------------------- |
+| answers    | set_updated_at | BEFORE        | UPDATE | EXECUTE FUNCTION update_updated_at_column() |

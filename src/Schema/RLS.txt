@@ -1,0 +1,13 @@
+| schemaname | tablename      | policy_name                                | command | is_permissive | roles           | using_expression  | check_expression  |
+| ---------- | -------------- | ------------------------------------------ | ------- | ------------- | --------------- | ----------------- | ----------------- |
+| public     | answers        | Allow inserts for everyone                 | INSERT  | PERMISSIVE    | {public}        | null              | true              |
+| public     | profiles       | Allow user to DELETE own profile           | DELETE  | PERMISSIVE    | {authenticated} | (id = auth.uid()) | null              |
+| public     | profiles       | Allow user to INSERT own profile           | INSERT  | PERMISSIVE    | {authenticated} | null              | (id = auth.uid()) |
+| public     | profiles       | Allow user to SELECT own profile           | SELECT  | PERMISSIVE    | {authenticated} | (id = auth.uid()) | null              |
+| public     | profiles       | Allow user to UPDATE own profile           | UPDATE  | PERMISSIVE    | {authenticated} | (id = auth.uid()) | null              |
+| public     | profiles       | enable_auth                                | SELECT  | PERMISSIVE    | {authenticated} | (id = auth.uid()) | null              |
+| public     | responses      | Enable insert for authenticated users only | INSERT  | PERMISSIVE    | {public}        | null              | true              |
+| public     | sessions       | Allow public insert                        | INSERT  | PERMISSIVE    | {public}        | null              | true              |
+| public     | sessions       | Allow public select                        | SELECT  | PERMISSIVE    | {public}        | true              | null              |
+| public     | sessions       | Enable insert for all                      | INSERT  | PERMISSIVE    | {public}        | null              | true              |
+| public     | uploaded_files | Allow inserts for everyone                 | INSERT  | PERMISSIVE    | {public}        | null              | true              |

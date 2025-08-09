@@ -1,0 +1,21 @@
+| table_name            | constraint_name                              | type | definition                                                                                 |
+| --------------------- | -------------------------------------------- | ---- | ------------------------------------------------------------------------------------------ |
+| responses             | responses_pkey                               | p    | PRIMARY KEY (id)                                                                           |
+| uploads               | uploads_pkey                                 | p    | PRIMARY KEY (id)                                                                           |
+| answers               | answers_email_qno_key                        | u    | UNIQUE (email, question_number)                                                            |
+| answers               | answers_email_question_key                   | u    | UNIQUE (email, question_number)                                                            |
+| answers               | answers_pkey                                 | p    | PRIMARY KEY (id)                                                                           |
+| answers               | answers_validation_status_check              | c    | CHECK ((validation_status = ANY (ARRAY['pending'::text, 'valid'::text, 'invalid'::text]))) |
+| answers               | unique_email_question                        | u    | UNIQUE (email, question_number)                                                            |
+| uploaded_files        | uploaded_files_pkey                          | p    | PRIMARY KEY (session_id)                                                                   |
+| sessions              | sessions_pkey                                | p    | PRIMARY KEY (id)                                                                           |
+| auditor_help_requests | auditor_help_requests_pkey                   | p    | PRIMARY KEY (id)                                                                           |
+| audit_logs            | audit_logs_pkey                              | p    | PRIMARY KEY (id)                                                                           |
+| disagreements         | disagreements_pkey                           | p    | PRIMARY KEY (id)                                                                           |
+| auditor_requests      | auditor_requests_pkey                        | p    | PRIMARY KEY (id)                                                                           |
+| profiles              | profiles_email_key                           | u    | UNIQUE (email)                                                                             |
+| profiles              | profiles_id_fkey                             | f    | FOREIGN KEY (id) REFERENCES auth.users(id)                                                 |
+| profiles              | profiles_pkey                                | p    | PRIMARY KEY (id)                                                                           |
+| supplier_names        | supplier_names_pkey                          | p    | PRIMARY KEY (email)                                                                        |
+| reviews               | reviews_email_session_id_question_number_key | u    | UNIQUE (email, session_id, question_number)                                                |
+| reviews               | reviews_pkey                                 | p    | PRIMARY KEY (id)                                                                           |
