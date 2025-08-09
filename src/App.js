@@ -776,7 +776,21 @@ if (!user) {
 }
 
 // --- UPLOAD SECTION ---
-
+function LoaderCard({ text }) {
+  return (
+    <div style={{ margin: "18px 0 10px 0" }}>
+      <div style={{ background:"#1f2a36", border:"1px solid #2e3c4a", borderRadius:10, padding:16, color:"#cfe7ff" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          <div style={{ width:24, height:24, borderRadius:"50%", border:"3px solid #cfe7ff", borderTopColor:"#229cf9", animation:"spin 0.9s linear infinite" }} />
+          <div>
+            <div style={{ fontWeight:700 }}>{text}</div>
+            <div style={{ fontSize:"0.85rem", opacity:0.85 }}>This can take 10–30 seconds depending on file size.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function MultiUploadSection({
   question,                 // { number, text, requirements:[...] }
@@ -806,7 +820,8 @@ function MultiUploadSection({
   const [localError, setLocalError] = useState("");
   const [disagreeOpen, setDisagreeOpen] = useState(false);
 const [disagreeReason, setDisagreeReason] = useState("");
-
+const [isValidating, setIsValidating] = useState(false);
+const [isAuditing, setIsAuditing] = useState(false);
   const reqCount = question?.requirements?.length ?? 0; // can be 0..12+
 useEffect(() => {
 	if (typeof focusReqIdx === "number") {
@@ -867,58 +882,47 @@ useEffect(() => {
   // 1) PRE-CHECK (AI: are these the *right* docs + suggestions)
   const runPrecheck = async () => {
   setLocalError("");
+  setIsValidating(true);
   try {
-    // Require at least the first 2 required files (Q1 has 2)
     if (!paths[0] || !paths[1]) {
       setLocalError("Please upload the required documents first.");
       return;
     }
-
-    // 1) Save r1 & r2 to the answers row
     const save = await apiFetch(`/api/audit/${questionNumber}/save-files`, {
       json: { email, r1Path: paths[0], r2Path: paths[1] },
     });
     if (!save.ok) throw new Error("Could not register files");
 
-    // 2) Validate those files (lightweight, NO scoring)
     const res = await apiFetch(`/api/audit/${questionNumber}/validate`, {
       json: { email, ocrLang },
     });
     if (!res.ok) throw new Error("Validation failed");
-    const data = await res.json();              // { isValid, feedback }
-
-    setPrecheck(data);                          // <-- shows inline
-    // no setMessages(): prevents the duplicate
+    const data = await res.json();
+    setPrecheck(data);            // shows AFTER loader
   } catch (e) {
     setLocalError(e.message || "Pre-check error");
+  } finally {
+    setIsValidating(false);
   }
 };
+
 
 
   // 2) AUDIT (final review) – proceed even if pre-check wasn't perfect
   const runAudit = async () => {
   setLocalError("");
+  setIsAuditing(true);
   try {
-    // Safety: ensure we have the 2 files registered (ok if runPrecheck did it)
     if (!paths[0] || !paths[1]) {
       setLocalError("Please upload the required documents first.");
       return;
     }
-
     const res = await apiFetch(`/api/audit/${questionNumber}/process`, {
-      json: {
-        email,
-        companyProfile: profile || {},
-        ocrLang,
-        insist: true, // proceed even if validation flagged a mismatch
-      },
+      json: { email, companyProfile: profile || {}, ocrLang, insist: true },
     });
     if (!res.ok) throw new Error("Audit failed");
-
-    const data = await res.json();              // { score, feedback }
+    const data = await res.json();
     setAuditResult(data);
-
-    // store into results table for Progress/Report
     setResults(prev => {
       const next = [...prev];
       next[questionNumber - 1] = {
@@ -928,16 +932,17 @@ useEffect(() => {
       };
       return next;
     });
-
-    // (optional) show audit feedback in chat
     setMessages(prev => [
       ...prev,
       { from: "bot", text: `🧠 **AI Audit (Q${questionNumber}):**\n\n${data.feedback || "No feedback."}` },
     ]);
   } catch (e) {
     setLocalError(e.message || "Audit error");
+  } finally {
+    setIsAuditing(false);
   }
 };
+
 
 
   // 3) User agrees – advance to next question
@@ -1007,7 +1012,7 @@ useEffect(() => {
   };
 
   const haveFirstTwo = Boolean(paths[0] && paths[1]);
-
+if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validating documents…" : "Running AI audit…"} />;
   return (
     <div style={{ margin: "18px 0 10px 0" }}>
       {/* OCR language */}
@@ -1062,7 +1067,7 @@ useEffect(() => {
       {/* Before pre-check */}
       {!precheck && !auditResult && (
         <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
-          <button className="continue-btn" onClick={runPrecheck} disabled={!haveFirstTwo}>
+          <button className="continue-btn" onClick={runAudit} disabled={isAuditing}>▶ Continue to Audit</button>
   🔍 Validate Documents
 </button>
           <button className="upload-btn" onClick={clearAll}>♻️ Clear All</button>
@@ -1219,6 +1224,7 @@ const cleanedSummary = cleanSummary(summary);
   };
 
   // === 6. Helper for formatting summary (as before) ===
+  
 
    
   return (

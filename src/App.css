@@ -237,7 +237,7 @@ body {
   cursor: pointer;
   margin-top: 12px;
 }
-
+@keyframes spin { to { transform: rotate(360deg); } }
 .skip-btn {
   background: var(--accent-blue);
   color: #393F45;
