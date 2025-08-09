@@ -26,7 +26,8 @@ async function apiFetch(
   { method = "POST", json, formData, headers = {} } = {}
 ) {
   const token = await getAccessToken();
-  const allHeaders = { ...headers, Authorization: `Bearer ${token}` };
+  const allHeaders = { ...headers };
+  if (token) allHeaders.Authorization = `Bearer ${token}`; // ← only if present
 
   if (json) {
     allHeaders["Content-Type"] = "application/json";
