@@ -275,17 +275,25 @@ function ProgressPopup({ results, questions, onJump, onClose }) {
               <ul style={{ marginLeft: 18, marginTop: 4, marginBottom: 2, paddingLeft: 0 }}>
                 {q.requirements.map((req, ridx) => {
                   const feedback = results[i].requirements[ridx]?.aiFeedback;
-                  let status = "Not started";
-                  let color = "#aaa";
-                  if (feedback) {
-                    if (feedback === "Skipped") {
-                      status = "Skipped";
-                      color = "#f39c12";
-                    } else {
-                      status = "Uploaded";
-                      color = "#157A4A";
-                    }
-                  }
+let status = "Not started";
+let color = "#aaa";
+switch (feedback) {
+  case "Uploaded":
+    status = "Uploaded"; color = "#157A4A"; break;
+  case "Validated":
+    status = "Validated"; color = "#157A4A"; break;
+  case "Covered by other docs":
+    status = "Covered by other docs"; color = "#0a7"; break;
+  case "Misaligned":
+    status = "Misaligned"; color = "#e67e22"; break;
+  case "Unreadable":
+    status = "Unreadable"; color = "#c00"; break;
+  case "Skipped":
+    status = "Skipped"; color = "#f39c12"; break;
+  default:
+    if (feedback) { status = feedback; color = "#157A4A"; }
+}
+
                   return (
       <li
         key={ridx}
@@ -913,7 +921,12 @@ const runPrecheck = async () => {
       setLocalError("Please upload at least one document first.");
       return;
     }
-
+// NEW: populate r1/r2 for backward compatibility (only if we have 2+)
+if (picked.length >= 2) {
+await apiFetch(`/api/audit/${questionNumber}/save-files`, {
+json: { email, r1Path: picked[0].path, r2Path: picked[1].path }
+});
+}
     const res = await apiFetch(`/api/audit/${questionNumber}/validate`, {
       json: {
         email,
@@ -924,13 +937,17 @@ const runPrecheck = async () => {
       },
     });
     if (!res.ok) throw new Error("Validation failed");
-    const data = await res.json();
-
-    // EXPECTED response keys used below:
-    // data.overall.status: "ok" | "warn" | "fail"
-    // data.requirements: [{ index, readable, readability, alignment, missing, moreSuggested, coverage? }]
-    // data.crossRequirement: [{ targetRequirementIndex, coveredByUploads:[idx], coverageScore, evidence }]
-    setPrecheck(data);
+    const raw = await res.json();
+// Normalize server response into the rich shape expected by the UI
+const data = raw.overall
+? raw
+: {
+overall: { status: raw.isValid ? "ok" : "fail", warnings: [], errors: raw.isValid ? [] : [raw.feedback] },
+requirements: [],
+crossRequirement: [],
+feedback: raw.feedback
+};
+setPrecheck(data);
 
     // Update Progress popup statuses
     setResults(prev => {
@@ -973,24 +990,62 @@ const runPrecheck = async () => {
   setLocalError("");
   setIsAuditing(true);
   try {
-    if (!paths[0] || !paths[1]) {
-      setLocalError("Please upload the required documents first.");
-      return;
-    }
-    const res = await apiFetch(`/api/audit/${questionNumber}/process`, {
-      json: { email, companyProfile: profile || {}, ocrLang, insist: true },
+    // must have at least one file
+if (!paths.some(Boolean)) {
+  setLocalError("Please upload at least one document first.");
+  return;
+}
+
+// if a precheck exists, enforce its findings before proceeding
+if (precheck) {
+  const missingIdxs = (question?.requirements || [])
+    .map((_, i) => i)
+    .filter(i => !paths[i]);
+
+  const allMissingCovered =
+    Array.isArray(precheck.crossRequirement) &&
+    missingIdxs.every(i => {
+      const cr = precheck.crossRequirement.find(c => c.targetRequirementIndex === i);
+      return cr && (cr.coverageScore || 0) >= 0.7;
     });
+
+  const hasUnreadable = precheck?.requirements?.some(r => r.readable === false);
+  const hardFail = precheck?.overall?.status === "fail" && !allMissingCovered;
+
+  if (hasUnreadable || hardFail) {
+    setLocalError(
+      hasUnreadable
+        ? "Fix unreadable files before continuing."
+        : "Some requirements are neither uploaded nor sufficiently covered."
+    );
+    return;
+  }
+}
+
+    const res = await apiFetch(`/api/audit/${questionNumber}/process`, {
+json: {
+email,
+companyProfile: profile || {},
+ocrLang,
+insist: true,
+files: paths.filter(Boolean).map((p, i) => ({ path: p, requirementIndex: i }))
+},
+});
     if (!res.ok) throw new Error("Audit failed");
     const data = await res.json();
 
 // NEW: fallback parse (e.g., "Score: Commitment (4/5)")
-const parsedScoreRaw =
-  Number.isFinite(Number(data?.score)) ? Number(data.score)
-  : Number((data?.feedback || "").match(/(\d+)\s*\/\s*5/)?.[1]) || null;
+// Robust score extraction — avoid treating null as 0
+function extractScoreFromFeedback(feedback) {
+  const m = String(feedback || "").match(/Score:\s*\w+\s*\((\d)\s*\/\s*5\)/i);
+  return m ? parseInt(m[1], 10) : null;
+}
 
-const parsedScore = parsedScoreRaw != null
-  ? Math.max(0, Math.min(5, parsedScoreRaw))
-  : null;
+const apiScore = data?.score;
+const parsedScore =
+  (typeof apiScore === "number" && apiScore >= 1 && apiScore <= 5)
+    ? apiScore
+    : extractScoreFromFeedback(data?.feedback);
 
 setAuditResult({ ...data, score: parsedScore });
 setResults(prev => {
@@ -1018,7 +1073,14 @@ setResults(prev => {
 
 
   // 3) User agrees – advance to next question
-  const agreeAndNext = () => {
+  const agreeAndNext = async () => {
+try {
+// copies ai_score -> final_score and marks finalized on the server
+await apiFetch(`/api/audit/${questionNumber}/agree`, { json: {} });
+} catch (e) {
+// non-blocking UI; you can toast if you want
+console.warn("Agree finalize failed:", e);
+}
     setShowMultiUpload(false);
     setPrecheck(null);
     setAuditResult(null);
@@ -1091,7 +1153,7 @@ const submitDisagree = async () => {
 };
 
 
-  const haveFirstTwo = Boolean(paths[0] && paths[1]);
+  
 if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validating documents…" : "Running AI audit…"} />;
   return (
     <div style={{ margin: "18px 0 10px 0" }}>
@@ -1155,12 +1217,14 @@ if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validat
       🔍 Validate Documents
     </button>
     <button
-      className="continue-btn"
-      onClick={runAudit}
-      disabled={isAuditing || paths.filter(Boolean).length === 0}
-    >
-      ▶ Continue to Audit
-    </button>
+  className="continue-btn"
+  onClick={runAudit}
+  disabled
+  title="Run Validate Documents first so I can check cross-requirement coverage."
+>
+  ▶ Continue to Audit
+</button>
+
     <button className="upload-btn" onClick={clearAll}>♻️ Clear All</button>
     <button
       className="disagree-btn"
@@ -1338,8 +1402,8 @@ if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validat
       {auditResult && (
         <div style={{ marginTop: 16 }}>
           <div style={{ color: "#157A4A", fontWeight: 700, marginBottom: 8 }}>
-            Proposed score: {auditResult.score ?? "-"} / 5
-          </div>
+  Proposed score: {(typeof auditResult.score === "number" && auditResult.score >= 1) ? auditResult.score : "—"} / 5
+</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button className="continue-btn" onClick={agreeAndNext}>✅ Agree & Continue</button>
             <button className="upload-btn" onClick={() => { setAuditResult(null); setPrecheck(null); }}>
@@ -1388,7 +1452,7 @@ if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validat
       📎 Attach evidence (PDF/JPG/PNG/DOCX) — optional
       <input
         type="file"
-        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+        accept=".pdf,.jpg,.jpeg,.png,.docx"
         multiple
         hidden
         onChange={e => setEvidenceFiles(Array.from(e.target.files || []))}
