@@ -377,8 +377,8 @@ useEffect(() => {
   }, [user]);
    
 
-  // --- Dialog logic ---
-  function getBotMessage({ step, answer, justAnswered }) {function getBotMessage({ step, answer, justAnswered }) {
+// --- Dialog logic ---
+function getBotMessage({ step, answer, justAnswered }) {
   if (step < 0) {
     return [
       "Hi there! Welcome to the VendorIQ Supplier Compliance Interview.",
@@ -386,7 +386,9 @@ useEffect(() => {
       "Let's begin!",
     ];
   }
+
   const q = questions[step];
+
   if (!justAnswered) {
     return [
       "Let's talk about your company's safety practices.",
