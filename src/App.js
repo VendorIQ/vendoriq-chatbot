@@ -990,78 +990,88 @@ setPrecheck(data);
   setLocalError("");
   setIsAuditing(true);
   try {
-    // must have at least one file
-if (!paths.some(Boolean)) {
-  setLocalError("Please upload at least one document first.");
-  return;
-}
+    if (!paths.some(Boolean)) {
+      setLocalError("Please upload at least one document first.");
+      return;
+    }
 
-// if a precheck exists, enforce its findings before proceeding
-if (precheck) {
-  const missingIdxs = (question?.requirements || [])
-    .map((_, i) => i)
-    .filter(i => !paths[i]);
+    if (precheck) {
+      const missingIdxs = (question?.requirements || [])
+        .map((_, i) => i)
+        .filter((i) => !paths[i]);
 
-  const allMissingCovered =
-    Array.isArray(precheck.crossRequirement) &&
-    missingIdxs.every(i => {
-      const cr = precheck.crossRequirement.find(c => c.targetRequirementIndex === i);
-      return cr && (cr.coverageScore || 0) >= 0.7;
-    });
+      const allMissingCovered =
+        Array.isArray(precheck.crossRequirement) &&
+        missingIdxs.every((i) => {
+          const cr = precheck.crossRequirement.find(
+            (c) => c.targetRequirementIndex === i,
+          );
+          return cr && (cr.coverageScore || 0) >= 0.7;
+        });
 
-  const hasUnreadable = precheck?.requirements?.some(r => r.readable === false);
-  const hardFail = precheck?.overall?.status === "fail" && !allMissingCovered;
+      const hasUnreadable = precheck?.requirements?.some(
+        (r) => r.readable === false,
+      );
+      const hardFail =
+        precheck?.overall?.status === "fail" && !allMissingCovered;
 
-  if (hasUnreadable || hardFail) {
-    setLocalError(
-      hasUnreadable
-        ? "Fix unreadable files before continuing."
-        : "Some requirements are neither uploaded nor sufficiently covered."
-    );
-    return;
-  }
-}
+      if (hasUnreadable || hardFail) {
+        setLocalError(
+          hasUnreadable
+            ? "Fix unreadable files before continuing."
+            : "Some requirements are neither uploaded nor sufficiently covered.",
+        );
+        return;
+      }
+    }
 
     const res = await apiFetch(`/api/audit/${questionNumber}/process`, {
-json: {
-email,
-companyProfile: profile || {},
-ocrLang,
-insist: true,
-files: paths.filter(Boolean).map((p, i) => ({ path: p, requirementIndex: i }))
-},
-});
+      json: {
+        email,
+        companyProfile: profile || {},
+        ocrLang,
+        files: paths
+          .filter(Boolean)
+          .map((p, i) => ({ path: p, requirementIndex: i })),
+        requirementLabels: question?.requirements || [],
+        totalRequirements: (question?.requirements || []).length,
+      },
+    });
     if (!res.ok) throw new Error("Audit failed");
     const data = await res.json();
 
-// NEW: fallback parse (e.g., "Score: Commitment (4/5)")
-// Robust score extraction — avoid treating null as 0
-function extractScoreFromFeedback(feedback) {
-  const m = String(feedback || "").match(/Score:\s*\w+\s*\((\d)\s*\/\s*5\)/i);
-  return m ? parseInt(m[1], 10) : null;
-}
+    function extractScoreFromFeedback(feedback) {
+      const m = String(feedback || "").match(
+        /Score:\s*\w+\s*\((\d)\s*\/\s*5\)/i,
+      );
+      return m ? parseInt(m[1], 10) : null;
+    }
 
-const apiScore = data?.score;
-const parsedScore =
-  (typeof apiScore === "number" && apiScore >= 1 && apiScore <= 5)
-    ? apiScore
-    : extractScoreFromFeedback(data?.feedback);
+    const apiScore = data?.score;
+    const parsedScore =
+      typeof apiScore === "number" && apiScore >= 1 && apiScore <= 5
+        ? apiScore
+        : extractScoreFromFeedback(data?.feedback);
 
-setAuditResult({ ...data, score: parsedScore });
-setResults(prev => {
-  const next = [...prev];
-  next[questionNumber - 1] = {
-    ...next[questionNumber - 1],
-    questionScore: parsedScore,
-    questionFeedback: data.feedback || ""
-  };
-  return next;
-});
+    setAuditResult({ ...data, score: parsedScore });
+    setResults((prev) => {
+      const next = [...prev];
+      next[questionNumber - 1] = {
+        ...next[questionNumber - 1],
+        questionScore: parsedScore,
+        questionFeedback: data.feedback || "",
+      };
+      return next;
+    });
 
-
-    setMessages(prev => [
+    setMessages((prev) => [
       ...prev,
-      { from: "bot", text: `🧠 **AI Audit (Q${questionNumber}):**\n\n${data.feedback || "No feedback."}` },
+      {
+        from: "bot",
+        text: `🧠 **AI Audit (Q${questionNumber}):**\n\n${
+          data.feedback || "No feedback."
+        }`,
+      },
     ]);
   } catch (e) {
     setLocalError(e.message || "Audit error");
@@ -1069,6 +1079,7 @@ setResults(prev => {
     setIsAuditing(false);
   }
 };
+
 
 
 
