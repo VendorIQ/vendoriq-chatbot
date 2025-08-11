@@ -747,6 +747,7 @@ if (!user) {
 		  results={results}
           setResults={setResults}
 		  focusReqIdx={focusReqIdx}
+		  userAnswer={answers[step]}
         />
       )}
       {/* YES/NO BUTTONS */}
@@ -847,6 +848,7 @@ function MultiUploadSection({
   results,                 // NEW
   setResults,              // NEW
   focusReqIdx,
+  userAnswer,
 }) {
   const [ocrLang, setOcrLang] = useState("eng");
   const [paths, setPaths] = useState(() => uploadedFiles[questionNumber] || []); // file paths per requirement
@@ -960,6 +962,9 @@ json: { email, r1Path: picked[0].path, r2Path: picked[1].path }
         files: picked, // [{ path, requirementIndex }]
         totalRequirements: question?.requirements?.length || 0,
         requirementLabels: question?.requirements || []
+		companyProfile: profile || {}, 
+		answer: userAnswer,
+		strict: !(questionNumber === 2 && userAnswer === "No"),
       },
     });
     if (!res.ok) throw new Error("Validation failed");
@@ -1061,6 +1066,8 @@ setPrecheck(data);
           .map((p, i) => ({ path: p, requirementIndex: i })),
         requirementLabels: question?.requirements || [],
         totalRequirements: (question?.requirements || []).length,
+		answer: userAnswer, 
+		strict: !(questionNumber === 2 && userAnswer === "No"),
       },
     });
     if (!res.ok) throw new Error("Audit failed");
