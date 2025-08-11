@@ -12,6 +12,14 @@ const safeNum = (v, d = 2) => {
   const n = Number(v);
   return Number.isFinite(n) ? n.toFixed(d) : "0.00";
 };
+// Should we show the upload/evidence block for this question/answer?
+const showUploadsFor = (qNum, answer) => {
+  const ans = String(answer || "").toLowerCase();
+  // Q2 accepts evidence for both Yes (explain issues) and No (prove clean record + system)
+  if (qNum === 2) return ans === "yes" || ans === "no";
+  // others: default behavior (only when user says Yes)
+  return ans === "yes";
+};
 
 // --- SUPABASE ---
 const supabase = createClient(
@@ -370,38 +378,43 @@ useEffect(() => {
    
 
   // --- Dialog logic ---
-  function getBotMessage({ step, answer, justAnswered }) {
-    if (step < 0) {
-      return [
-        "Hi there! Welcome to the VendorIQ Supplier Compliance Interview.",
-        "I’ll be your guide today—just answer a few questions, and I’ll help you every step of the way.",
-        "Let's begin!",
-      ];
-    }
-    const q = questions[step];
-    if (!justAnswered) {
-      return [
-        "Let's talk about your company's safety practices.",
-        `**Question ${q.number}:** ${q.text}`,
-      ];
-    }
-    if (answer === "Yes") {
-      return [
-        "Awesome, thanks for letting me know!",
-        "Since you answered yes, could you please upload the required documents? (You can drag and drop your files or click to upload.)",
-      ];
-    }
-    if (answer === "No" && q.disqualifiesIfNo) {
-      return [
-        "Thanks for your honesty!",
-        "Just so you know, having a written OHS Policy is an important requirement. Let's continue.",
-      ];
-    }
+  function getBotMessage({ step, answer, justAnswered }) {function getBotMessage({ step, answer, justAnswered }) {
+  if (step < 0) {
+    return [
+      "Hi there! Welcome to the VendorIQ Supplier Compliance Interview.",
+      "I’ll be your guide today—just answer a few questions, and I’ll help you every step of the way.",
+      "Let's begin!",
+    ];
+  }
+  const q = questions[step];
+  if (!justAnswered) {
+    return [
+      "Let's talk about your company's safety practices.",
+      `**Question ${q.number}:** ${q.text}`,
+    ];
+  }
+
+  if (answer === "Yes" || (q.number === 2 && answer === "No")) {
+    const optional = q.number === 2 && answer === "No";
+    return [
+      optional ? "Thanks for letting me know!" : "Awesome, thanks for letting me know!",
+      optional
+        ? "Optional evidence: upload your legal register, compliance procedure, and a signed 'no infringements in the last 3 years' statement. This can strengthen your score."
+        : "Since you answered yes, could you please upload the required documents? (You can drag and drop your files or click to upload.)",
+    ];
+  } else if (answer === "No" && q.disqualifiesIfNo) {
+    return [
+      "Thanks for your honesty!",
+      "Just so you know, having a written OHS Policy is an important requirement. Let's continue.",
+    ];
+  } else {
     return [
       "Thanks for your response!",
       "Let's move on to the next question.",
     ];
   }
+}
+
 
 // --- Save answer to backend ---
 const saveAnswerToBackend = async (questionNumber, answer) => {
@@ -467,20 +480,26 @@ saveAnswerToBackend(questionNumber, answer); // token supplies email
 
   const botMsgs = getBotMessage({ step, answer, justAnswered: true });
   sendBubblesSequentially(botMsgs, "bot", 650, () => {
-      if (answer === "Yes" && questions[step].requirements.length > 0) {
-	  setFocusReqIdx(null);          // <— add this line
-      setShowMultiUpload(true);   // NEW
-         } else {
-      setTimeout(() => {
-        if (reviewMode) {
-          setReviewMode(false);
-          setStep(questions.length);
-        } else {
-          setStep((prev) => prev + 1);
-        }
-        setJustAnswered(false);
-      }, 350);
+const qNum = questions[step].number;
+const shouldShow =
+  showUploadsFor(qNum, answer) &&
+  (questions[step].requirements?.length > 0);
+
+if (shouldShow) {
+  setFocusReqIdx(null);
+  setShowMultiUpload(true);
+} else {
+  setTimeout(() => {
+    if (reviewMode) {
+      setReviewMode(false);
+      setStep(questions.length);
+    } else {
+      setStep((prev) => prev + 1);
     }
+    setJustAnswered(false);
+  }, 350);
+}
+
   });
   setJustAnswered(true);
 };
@@ -583,20 +602,22 @@ if (!user) {
     
 {showProgress && (
   <ProgressPopup
-  results={results}
-  questions={questions}
-  onJump={(qIdx, reqIdx) => {
-    setStep(qIdx);
-    setShowMultiUpload(results[qIdx]?.answer === "Yes");
-    setShowSummary(false);
-    setReviewMode(false);
-    setMessages([]);
-    setShowProgress(false); // Hide popup after jump
-	setFocusReqIdx(typeof reqIdx === "number" ? reqIdx : null);
-  }}
-  onClose={() => setShowProgress(false)}
-/>
+    results={results}
+    questions={questions}
+    onJump={(qIdx, reqIdx) => {
+      setStep(qIdx);
+      setShowMultiUpload(
+      showUploadsFor(questions[qIdx].number, results[qIdx]?.answer));
+      setShowSummary(false);
+      setReviewMode(false);
+      setMessages([]);
+      setShowProgress(false);
+      setFocusReqIdx(typeof reqIdx === "number" ? reqIdx : null);
+    }}
+    onClose={() => setShowProgress(false)}
+  />
 )}
+
 
       {/* CHAT HISTORY */}
       <div
