@@ -8,7 +8,10 @@ import AuditorReviewPanel from "./AuditorReviewPanel";
 import AuthPage from "./AuthPage";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-
+const safeNum = (v, d = 2) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toFixed(d) : "0.00";
+};
 
 // --- SUPABASE ---
 const supabase = createClient(
@@ -1304,9 +1307,12 @@ if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validat
         {/* 2) Alignment */}
         <div style={{ marginBottom:6 }}>
           <b>Alignment:</b>{" "}
-          {r.alignment?.meets
-            ? `✅ Meets (confidence ${(r.alignment.confidence*100|0)}%)`
-            : "⚠️ Possibly misaligned"}
+{r.alignment?.meets
+  ? `✅ Meets (confidence ${Math.round(
+      Math.min(1, Math.max(0, Number(r.alignment?.confidence ?? 0))) * 100
+    )}%)`
+  : "⚠️ Possibly misaligned"}
+
           {Array.isArray(r.alignment?.evidence) && r.alignment.evidence.length > 0 && (
             <ul style={{ marginTop:4 }}>
               {r.alignment.evidence.map((e,i)=><li key={i}>{e}</li>)}
@@ -1352,8 +1358,19 @@ if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validat
     <ul style={{ margin:0, paddingLeft:18 }}>
       {precheck.crossRequirement.map((c, i) => (
         <li key={i} style={{ marginBottom:6 }}>
-          Requirement {c.targetRequirementIndex + 1} appears covered by uploads {c.coveredByUploads.map(n => n + 1).join(", ")}
-          {" "}({Math.round((c.coverageScore||0) * 100)}% confidence)
+          {(() => {
+  const uploads = Array.isArray(c.coveredByUploads)
+    ? c.coveredByUploads
+    : (typeof c.sourceIndex === "number" ? [c.sourceIndex] : []);
+  const pct = Math.round(Number(c.coverageScore ?? 0) * 100);
+  return (
+    <>
+      Requirement {c.targetRequirementIndex + 1} appears covered by uploads{" "}
+      {uploads.map(n => n + 1).join(", ") || "—"} ({pct}% confidence)
+    </>
+  );
+})()}
+
         </li>
       ))}
     </ul>
