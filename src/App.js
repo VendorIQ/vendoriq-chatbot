@@ -961,7 +961,7 @@ json: { email, r1Path: picked[0].path, r2Path: picked[1].path }
         ocrLang,
         files: picked, // [{ path, requirementIndex }]
         totalRequirements: question?.requirements?.length || 0,
-        requirementLabels: question?.requirements || []
+        requirementLabels: question?.requirements || [],
 		companyProfile: profile || {}, 
 		answer: userAnswer,
 		strict: !(questionNumber === 2 && userAnswer === "No"),
