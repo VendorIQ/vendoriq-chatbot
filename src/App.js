@@ -549,16 +549,16 @@ if (!user) {
   );
 }
 function getActiveRequirements(q, answer) {
-  if (q?.number === 2 && String(answer || "").toLowerCase() === "no") {
-    // Only the declaration is required; others are optional bonus
-    return [q.requirements[0]];
-  }
-  return q?.requirements || [];
-}
+  if (!q) return [];
+  const ans = String(answer || "").toLowerCase();
 
-// Whether the validator/grader should enforce all listed requirements
-const isStrictFor = (qNum, answer) =>
-  !(qNum === 2 && String(answer || "").toLowerCase() === "no");
+  // Q2 + "No": show ALL requirements, but only #1 is required; others are optional.
+  if (q.number === 2 && ans === "no") {
+    return q.requirements.map((r, i) => (i === 0 ? r : `${r} (optional)`));
+  }
+
+  return q.requirements || [];
+}
 
 
   // --- RENDER ---
