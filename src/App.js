@@ -559,6 +559,10 @@ function getActiveRequirements(q, answer) {
 
   return q.requirements || [];
 }
+// Whether the validator/grader should enforce all listed requirements.
+// For Q2 + "No", keep validation non-strict so only #1 is required.
+const isStrictFor = (qNum, answer) =>
+  !(qNum === 2 && String(answer || "").toLowerCase() === "no");
 
 
   // --- RENDER ---
@@ -1274,10 +1278,14 @@ if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validat
       <div style={{ display: "grid", gap: 10 }}>
         {Array.from({ length: Math.max(1, reqCount || 1) }).map((_, idx) => (
   <div key={idx} id={`req-slot-${idx}`} style={{ display: "grid", gap: 6 }}>
-    <div style={{ color: "#bfe3ff", fontSize: "0.85rem" }}>
-      <strong>Requirement {idx + 1}:</strong>{" "}
-      {activeRequirements?.[idx] || "Additional document"}
-    </div>
+    const isQ2No = questionNumber === 2 && String(userAnswer || "").toLowerCase() === "no";
+
+<div style={{ color: "#bfe3ff", fontSize: "0.85rem" }}>
+  <strong>Requirement {idx + 1}:</strong>{" "}
+  {activeRequirements?.[idx] || "Additional document"}
+  {isQ2No && idx > 0 ? " (optional)" : ""}
+</div>
+
     <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
       <label className="browse-btn">
         📄 Choose File
