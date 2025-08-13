@@ -554,8 +554,8 @@ function getActiveRequirements(q, answer) {
 
   // Q2 + "No": show ALL requirements, but only #1 is required; others are optional.
   if (q.number === 2 && ans === "no") {
-    return q.requirements.map((r, i) => (i === 0 ? r : `${r} (optional)`));
-  }
+  return q.requirements; // show all; UI adds "(optional)"
+}
 
   return q.requirements || [];
 }
@@ -1276,38 +1276,42 @@ if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validat
 
       {/* N pickers (one per requirement). If a question has 12, you’ll see 12 inputs */}
       <div style={{ display: "grid", gap: 10 }}>
-        {Array.from({ length: Math.max(1, reqCount || 1) }).map((_, idx) => (
-  <div key={idx} id={`req-slot-${idx}`} style={{ display: "grid", gap: 6 }}>
-    const isQ2No = questionNumber === 2 && String(userAnswer || "").toLowerCase() === "no";
+  {Array.from({ length: Math.max(1, reqCount || 1) }).map((_, idx) => {
+    const isQ2No =
+      questionNumber === 2 &&
+      String(userAnswer || "").toLowerCase() === "no";
 
-<div style={{ color: "#bfe3ff", fontSize: "0.85rem" }}>
-  <strong>Requirement {idx + 1}:</strong>{" "}
-  {activeRequirements?.[idx] || "Additional document"}
-  {isQ2No && idx > 0 ? " (optional)" : ""}
+    return (
+      <div key={idx} id={`req-slot-${idx}`} style={{ display: "grid", gap: 6 }}>
+        <div style={{ color: "#bfe3ff", fontSize: "0.85rem" }}>
+          <strong>Requirement {idx + 1}:</strong>{" "}
+          {activeRequirements?.[idx] || "Additional document"}
+          {isQ2No && idx > 0 ? " (optional)" : ""}
+        </div>
+
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <label className="browse-btn">
+            📄 Choose File
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.docx,.txt"
+              hidden
+              onChange={e => {
+                const f = e.target.files?.[0];
+                if (f) uploadForIndex(idx, f);
+              }}
+              disabled={uploadingIdx === idx}
+            />
+          </label>
+          <span style={{ color: "#fff" }}>
+            {paths[idx] ? paths[idx].split("/").pop() : "No file chosen"}
+          </span>
+        </div>
+      </div>
+    );
+  })}
 </div>
 
-    <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-      <label className="browse-btn">
-        📄 Choose File
-        <input
-          type="file"
-          accept=".pdf,.jpg,.jpeg,.png,.docx,.txt"
-          hidden
-          onChange={e => {
-            const f = e.target.files?.[0];
-            if (f) uploadForIndex(idx, f);
-          }}
-          disabled={uploadingIdx === idx}
-        />
-      </label>
-      <span style={{ color: "#fff" }}>
-        {paths[idx] ? paths[idx].split("/").pop() : "No file chosen"}
-      </span>
-    </div>
-  </div>
-))}
-
-      </div>
 
  {/* Before pre-check */}
 {!precheck && !auditResult && (
