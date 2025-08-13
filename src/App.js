@@ -20,7 +20,6 @@ const showUploadsFor = (qNum, answer) => {
   // others: default behavior (only when user says Yes)
   return ans === "yes";
 };
-
 // --- SUPABASE ---
 const supabase = createClient(
   process.env.REACT_APP_SUPABASE_URL,
@@ -130,55 +129,81 @@ function formatSummary(summary) {
 // =============== MAIN APP COMPONENT ===============
 function ChatApp() {
   const [reportBreakdown, setReportBreakdown] = useState([]); // NEW
-  const [bubblesComplete, setBubblesComplete] = useState(false); // <--- ADD THIS IF NOT DECLARED
-  const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callback) => {
-  setTyping(true); // <--- Mark as typing at start
+  const chatEndRef = useRef(null);
+const timersRef = useRef([]);
+  const [bubblesComplete, setBubblesComplete] = useState(false);
+
+const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callback) => {
+  // clear any previous timers/intervals
+  timersRef.current.forEach(id => {
+    clearTimeout(id);
+    clearInterval(id);
+  });
+  timersRef.current = [];
+
+  setTyping(true);
   setBubblesComplete(false);
-  // ⬇️ Guard for empty arrays
+
   if (!messagesArray?.length) {
     setTyping(false);
     setBubblesComplete(true);
-    if (typeof callback === "function") callback(); // optional
+    if (typeof callback === "function") callback();
     return;
   }
+
   let idx = 0;
-  function sendNext() {
+
+  const sendNext = () => {
     let i = 0;
     setMessages(prev => [...prev, { from, text: "" }]);
-    const interval = setInterval(() => {
+
+    const intervalId = setInterval(() => {
       setMessages(prev => {
         const newMsgs = [...prev];
         newMsgs[newMsgs.length - 1] = {
           ...newMsgs[newMsgs.length - 1],
-          text: messagesArray[idx].slice(0, i + 1)
+          text: messagesArray[idx].slice(0, i + 1),
         };
         return newMsgs;
       });
+
       i++;
       if (i >= messagesArray[idx].length) {
-        clearInterval(interval);
-        setTimeout(() => {
+        clearInterval(intervalId);
+
+        const afterType = setTimeout(() => {
           idx++;
           if (idx < messagesArray.length) {
-            setTimeout(sendNext, delay);
-          } else if (callback) {
-            setTimeout(() => {
-              setTyping(false); // <--- Typing finished!
-              setBubblesComplete(true);
-              callback();
-            }, delay);
+            timersRef.current.push(setTimeout(sendNext, delay));
           } else {
-            setTimeout(() => {
-              setTyping(false); // <--- Typing finished!
+            const done = setTimeout(() => {
+              setTyping(false);
               setBubblesComplete(true);
+              if (callback) callback();
             }, delay);
+            timersRef.current.push(done);
           }
         }, 350);
+
+        timersRef.current.push(afterType);
       }
     }, 12);
-  }
+
+    timersRef.current.push(intervalId);
+  };
+
   sendNext();
 };
+useEffect(() => {
+  return () => {
+    timersRef.current.forEach(id => {
+      clearTimeout(id);
+      clearInterval(id);
+    });
+    timersRef.current = [];
+  };
+}, []);
+
 
 
 //================ AKA useState ===========================
@@ -198,7 +223,6 @@ function ChatApp() {
   const [showSummary, setShowSummary] = useState(false);
   const [answers, setAnswers] = useState([]);
   const [reviewMode, setReviewMode] = useState(false);
-  const chatEndRef = useRef(null);
   const [companyName, setCompanyName] = useState("");
 
 
@@ -281,51 +305,59 @@ function ProgressPopup({ results, questions, onJump, onClose }) {
             >
               Go
             </button>
+			
+			
             {/* Requirement Progress as Text */}
-            {results[i]?.answer === "Yes" && Array.isArray(q.requirements) && (
-              <ul style={{ marginLeft: 18, marginTop: 4, marginBottom: 2, paddingLeft: 0 }}>
-                {q.requirements.map((req, ridx) => {
-                  const feedback = results[i].requirements[ridx]?.aiFeedback;
-let status = "Not started";
-let color = "#aaa";
-switch (feedback) {
-  case "Uploaded":
-    status = "Uploaded"; color = "#157A4A"; break;
-  case "Validated":
-    status = "Validated"; color = "#157A4A"; break;
-  case "Covered by other docs":
-    status = "Covered by other docs"; color = "#0a7"; break;
-  case "Misaligned":
-    status = "Misaligned"; color = "#e67e22"; break;
-  case "Unreadable":
-    status = "Unreadable"; color = "#c00"; break;
-  case "Skipped":
-    status = "Skipped"; color = "#f39c12"; break;
-  default:
-    if (feedback) { status = feedback; color = "#157A4A"; }
-}
+{showUploadsFor(q.number, results[i]?.answer) && (
+  <ul style={{ marginLeft: 18, marginTop: 4, marginBottom: 2, paddingLeft: 0 }}>
+    {getActiveRequirements(q, results[i]?.answer).map((_, ridx) => {
+      const feedback = results[i].requirements?.[ridx]?.aiFeedback;
+      let status = "Not started";
+      let color = "#aaa";
+      switch (feedback) {
+        case "Uploaded":
+          status = "Uploaded"; color = "#157A4A"; break;
+        case "Validated":
+          status = "Validated"; color = "#157A4A"; break;
+        case "Covered by other docs":
+          status = "Covered by other docs"; color = "#0a7"; break;
+        case "Misaligned":
+          status = "Misaligned"; color = "#e67e22"; break;
+        case "Unreadable":
+          status = "Unreadable"; color = "#c00"; break;
+        case "Skipped":
+          status = "Skipped"; color = "#f39c12"; break;
+        default:
+          if (feedback) { status = feedback; color = "#157A4A"; }
+      }
 
-                  return (
-      <li
-        key={ridx}
-        style={{
-          fontSize: "0.9rem",
-          color,
-          fontWeight: 600,
-          marginBottom: 1,
-          listStyle: "none",
-          cursor: "pointer", // add pointer
-          textDecoration: "underline dotted", // optional, to show it's clickable
-        }}
-        onClick={() => onJump(i, ridx)} // pass requirement index too!
-        title="Jump to this requirement"
-      >
-        Requirement {ridx + 1}: {status}
-      </li>
-    );
-  })}
-</ul>
-            )}
+      return (
+        <li
+          key={ridx}
+          style={{
+            fontSize: "0.9rem",
+            color,
+            fontWeight: 600,
+            marginBottom: 1,
+            listStyle: "none",
+            cursor: "pointer",
+            textDecoration: "underline dotted",
+          }}
+          onClick={() => onJump(i, ridx)}
+          title="Jump to this requirement"
+        >
+          Requirement {ridx + 1}: {status}
+        </li>
+      );
+    })}
+  </ul>
+)}
+
+			
+			
+			
+			
+			
           </li>
         ))}
       </ul>
@@ -432,12 +464,13 @@ const saveAnswerToBackend = async (questionNumber, answer) => {
 
   // --- Auto-scroll chat to bottom whenever messages or typing changes ---
   useEffect(() => {
-    if (chatEndRef.current) {
-		 setTimeout(() => {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
-    }, 50); // slight delay helps avoid nav clipping
-    }
-  }, [messages, typing]);
+  if (!chatEndRef.current) return;
+  const t = setTimeout(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, 50);
+  return () => clearTimeout(t);
+}, [messages, typing]);
+
 
   // --- Ask next question only when appropriate ---
   useEffect(() => {
@@ -515,6 +548,17 @@ if (!user) {
     />
   );
 }
+function getActiveRequirements(q, answer) {
+  if (q?.number === 2 && String(answer || "").toLowerCase() === "no") {
+    // Only the declaration is required; others are optional bonus
+    return [q.requirements[0]];
+  }
+  return q?.requirements || [];
+}
+
+// Whether the validator/grader should enforce all listed requirements
+const isStrictFor = (qNum, answer) =>
+  !(qNum === 2 && String(answer || "").toLowerCase() === "no");
 
 
   // --- RENDER ---
@@ -748,6 +792,8 @@ if (!user) {
           setResults={setResults}
 		  focusReqIdx={focusReqIdx}
 		  userAnswer={answers[step]}
+		  activeRequirements={getActiveRequirements(questions[step], answers[step])}
+          strict={isStrictFor(questions[step].number, answers[step])}
         />
       )}
       {/* YES/NO BUTTONS */}
@@ -849,7 +895,11 @@ function MultiUploadSection({
   setResults,              // NEW
   focusReqIdx,
   userAnswer,
+  // NEW:
+  activeRequirements,
+  strict = true,
 }) {
+	const reqCount = activeRequirements?.length ?? 0;
   const [ocrLang, setOcrLang] = useState("eng");
   const [paths, setPaths] = useState(() => uploadedFiles[questionNumber] || []); // file paths per requirement
   const [uploadingIdx, setUploadingIdx] = useState(null);
@@ -860,7 +910,7 @@ const [evidenceFiles, setEvidenceFiles] = useState([]);           // NEW
 const [isSubmittingDisagree, setIsSubmittingDisagree] = useState(false); // NEW
 const [isValidating, setIsValidating] = useState(false);
 const [isAuditing, setIsAuditing] = useState(false);
-  const reqCount = question?.requirements?.length ?? 0; // can be 0..12+
+
 useEffect(() => {
 	if (typeof focusReqIdx === "number") {
 	const el = document.getElementById(`req-slot-${focusReqIdx}`);
@@ -956,16 +1006,18 @@ json: { email, r1Path: picked[0].path, r2Path: picked[1].path }
 });
 }
     const res = await apiFetch(`/api/audit/${questionNumber}/validate`, {
-      json: {
-        email,
-        ocrLang,
-        files: picked, // [{ path, requirementIndex }]
-        totalRequirements: question?.requirements?.length || 0,
-        requirementLabels: question?.requirements || [],
-		companyProfile: profile || {}, 
-		answer: userAnswer,
-		strict: !(questionNumber === 2 && userAnswer === "No"),
-      },
+json: {
+  email,
+  companyProfile: profile || {},
+  ocrLang,
+  files: paths
+    .filter(Boolean)
+    .map((p, i) => ({ path: p, requirementIndex: i })),
+  requirementLabels: activeRequirements, // active only
+  totalRequirements: reqCount,           // active only
+  answer: userAnswer,
+  strict,                                // false for Q2 + No
+},
     });
     if (!res.ok) throw new Error("Validation failed");
     const raw = await res.json();
@@ -1027,48 +1079,47 @@ setPrecheck(data);
     }
 
     if (precheck) {
-      const missingIdxs = (question?.requirements || [])
-        .map((_, i) => i)
-        .filter((i) => !paths[i]);
+  const missingIdxs = (activeRequirements || [])
+    .map((_, i) => i)
+    .filter((i) => !paths[i]);
 
-      const allMissingCovered =
-        Array.isArray(precheck.crossRequirement) &&
-        missingIdxs.every((i) => {
-          const cr = precheck.crossRequirement.find(
-            (c) => c.targetRequirementIndex === i,
-          );
-          return cr && (cr.coverageScore || 0) >= 0.7;
-        });
-
-      const hasUnreadable = precheck?.requirements?.some(
-        (r) => r.readable === false,
+  const allMissingCovered =
+    Array.isArray(precheck.crossRequirement) &&
+    missingIdxs.every((i) => {
+      const cr = precheck.crossRequirement.find(
+        (c) => c.targetRequirementIndex === i
       );
-      const hardFail =
-        precheck?.overall?.status === "fail" && !allMissingCovered;
+      return cr && (cr.coverageScore || 0) >= 0.7;
+    });
 
-      if (hasUnreadable || hardFail) {
-        setLocalError(
-          hasUnreadable
-            ? "Fix unreadable files before continuing."
-            : "Some requirements are neither uploaded nor sufficiently covered.",
-        );
-        return;
-      }
-    }
+  const hasUnreadable = precheck?.requirements?.some((r) => r.readable === false);
+  const hardFail = precheck?.overall?.status === "fail" && !allMissingCovered;
+
+  if (hasUnreadable || hardFail) {
+    setLocalError(
+      hasUnreadable
+        ? "Fix unreadable files before continuing."
+        : "Some requirements are neither uploaded nor sufficiently covered."
+    );
+    return;
+  }
+}
+
 
     const res = await apiFetch(`/api/audit/${questionNumber}/process`, {
       json: {
-        email,
-        companyProfile: profile || {},
-        ocrLang,
-        files: paths
-          .filter(Boolean)
-          .map((p, i) => ({ path: p, requirementIndex: i })),
-        requirementLabels: question?.requirements || [],
-        totalRequirements: (question?.requirements || []).length,
-		answer: userAnswer, 
-		strict: !(questionNumber === 2 && userAnswer === "No"),
-      },
+  email,
+  companyProfile: profile || {},
+  ocrLang,
+  files: paths
+    .filter(Boolean)
+    .map((p, i) => ({ path: p, requirementIndex: i })),
+  requirementLabels: activeRequirements, // ✅ use active set
+  totalRequirements: reqCount,           // ✅ use active count
+  answer: userAnswer,
+  strict,                                // ✅ use the prop
+},
+
     });
     if (!res.ok) throw new Error("Audit failed");
     const data = await res.json();
@@ -1225,7 +1276,7 @@ if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validat
   <div key={idx} id={`req-slot-${idx}`} style={{ display: "grid", gap: 6 }}>
     <div style={{ color: "#bfe3ff", fontSize: "0.85rem" }}>
       <strong>Requirement {idx + 1}:</strong>{" "}
-      {question?.requirements?.[idx] || "Additional document"}
+      {activeRequirements?.[idx] || "Additional document"}
     </div>
     <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
       <label className="browse-btn">
@@ -1321,7 +1372,7 @@ if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validat
         padding:12, color:"#d3e8ff", marginBottom:10
       }}>
         <div style={{ fontWeight:700, marginBottom:6 }}>
-          Requirement {r.index + 1}: {question?.requirements?.[r.index] || "—"}
+          Requirement {r.index + 1}: {activeRequirements?.[r.index] || "—"}
         </div>
 
         {/* 1) Readable / crash-check */}
@@ -1417,9 +1468,9 @@ if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validat
     {/* Actions */}
     <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:10 }}>
       {(() => {
-  const missingIdxs = (question?.requirements || [])
-    .map((_, i) => i)
-    .filter(i => !paths[i]); // not uploaded
+  const missingIdxs = (activeRequirements || [])
+  .map((_, i) => i)
+  .filter(i => !paths[i]);
 
   const allMissingCovered =
     Array.isArray(precheck?.crossRequirement) &&
@@ -1665,39 +1716,46 @@ const cleanedSummary = cleanSummary(summary);
             </tr>
           </thead>
           <tbody>
-  {breakdown.map((row, qIdx) =>
-    (row.requirementScores && row.requirementScores.length > 0
-      ? row.requirementScores.map((scoreVal, reqIdx) => (
-          <tr key={`${qIdx}-${reqIdx}`}>
-            <td>{row.questionNumber}</td>
-            <td>{questions[qIdx]?.text.slice(0, 32)}...</td>
-            <td>{row.answer}</td>
-            <td>
-              {questions[qIdx]?.requirements[reqIdx]
-                ? questions[qIdx].requirements[reqIdx].slice(0, 38) + "..."
-                : "-"}
-            </td>
-             <td>{scoreVal != null ? `${scoreVal}/5` : "— (Pending auditor)"}</td>
-            <td>
-              {row.upload_feedback && Array.isArray(row.upload_feedback)
-                ? (row.upload_feedback[reqIdx] || "-").slice(0, 48)
-                : (row.upload_feedback || "-").slice(0, 48)}
-            </td>
-          </tr>
-        ))
-      : (
-        <tr key={qIdx}>
+  {breakdown.map((row) => {
+    const qIndex = questions.findIndex(q => q.number === row.questionNumber);
+    const q = questions[qIndex];
+
+    if (Array.isArray(row.requirementScores) && row.requirementScores.length > 0) {
+      return row.requirementScores.map((scoreVal, reqIdx) => (
+        <tr key={`${row.questionNumber}-${reqIdx}`}>
           <td>{row.questionNumber}</td>
-          <td>{questions[qIdx]?.text.slice(0, 32)}...</td>
+          <td>{q?.text?.slice(0, 32)}...</td>
           <td>{row.answer}</td>
-          <td>-</td>
-          <td>-</td>
-          <td>{typeof row.upload_feedback === "string" ? row.upload_feedback.slice(0, 48) : "-"}</td>
+          <td>
+            {q?.requirements?.[reqIdx]
+              ? q.requirements[reqIdx].slice(0, 38) + "..."
+              : "-"}
+          </td>
+          <td>{scoreVal != null ? `${scoreVal}/5` : "— (Pending auditor)"}</td>
+          <td>
+            {Array.isArray(row.upload_feedback)
+              ? (row.upload_feedback[reqIdx] || "-").slice(0, 48)
+              : (row.upload_feedback || "-").slice(0, 48)}
+          </td>
         </tr>
-      )
-    )
-  )}
+      ));
+    }
+
+    return (
+      <tr key={`${row.questionNumber}-summary`}>
+        <td>{row.questionNumber}</td>
+        <td>{q?.text?.slice(0, 32)}...</td>
+        <td>{row.answer}</td>
+        <td>-</td>
+        <td>-</td>
+        <td>{typeof row.upload_feedback === "string"
+              ? row.upload_feedback.slice(0, 48)
+              : "-"}</td>
+      </tr>
+    );
+  })}
 </tbody>
+
 
         </table>
 
