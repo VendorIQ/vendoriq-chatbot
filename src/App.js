@@ -30,38 +30,39 @@ async function getAccessToken() {
   const { data: { session } } = await supabase.auth.getSession();
   return session?.access_token || "";
 }
-
 async function apiFetch(
   path,
   { method = "POST", json, formData, headers = {} } = {}
 ) {
   const token = await getAccessToken();
   const allHeaders = { ...headers };
-  if (token) allHeaders.Authorization = `Bearer ${token}`; // ← only if present
+  if (token) allHeaders.Authorization = `Bearer ${token}`;
+
+  const makeUrl = (p) => `${BACKEND_URL}${p.startsWith("/") ? p : `/${p}`}`;
+
+  let fetchOptions = { method, headers: allHeaders };
 
   if (json) {
     allHeaders["Content-Type"] = "application/json";
-    return fetch(`${BACKEND_URL}${path}`, {
-      method,
-      headers: allHeaders,
-      body: JSON.stringify(json),
-    });
+    fetchOptions = { ...fetchOptions, body: JSON.stringify(json) };
+  } else if (formData) {
+    // Do NOT set Content-Type for FormData
+    fetchOptions = { ...fetchOptions, body: formData };
   }
-  if (formData) {
-    // don't set Content-Type for FormData
-    return fetch(`${BACKEND_URL}${path}`, {
-      method,
-      headers: allHeaders,
-      body: formData,
-    });
+
+  const res = await fetch(makeUrl(path), fetchOptions);
+  if (res.status === 401) {
+    // Token invalid/expired -> sign out locally so UI resets cleanly
+    await supabase.auth.signOut();
   }
-  return fetch(`${BACKEND_URL}${path}`, { method, headers: allHeaders });
+  return res; // callers already check res.ok in your code
 }
+
 
 // --- CONSTANTS ---
 const botAvatar = process.env.PUBLIC_URL + "/bot-avatar.png";
-const BACKEND_URL = "https://4d66d45e-0288-4203-935e-1c5d2a182bde-00-38ratc2twzear.pike.replit.dev";
-
+const BACKEND_URL =
+  (process.env.REACT_APP_API_BASE || "http://localhost:8080").replace(/\/$/, "");
 // --- QUESTIONS ---
 const questions = [
   {
@@ -366,11 +367,21 @@ function ProgressPopup({ results, questions, onJump, onClose }) {
 }
 
 useEffect(() => {
-  // Get current session on load
+  // Seed initial session
   supabase.auth.getSession().then(({ data: { session } }) => {
-    if (session?.user) setUser(session.user);
+    setUser(session?.user ?? null);
   });
+
+  // React to future auth changes (refresh, sign-in/out)
+  const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+    setUser(sess?.user ?? null);
+  });
+
+  return () => {
+    sub?.subscription?.unsubscribe?.();
+  };
 }, []);
+
 
 useEffect(() => {
   if (user) {
@@ -931,57 +942,65 @@ useEffect(() => {
 }, [questionNumber, reqCount, uploadedFiles]);
 
 
+const uploadForIndex = async (idx, file) => {
+  const MAX_MB = 25;
+  const okTypes = [
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+  ];
 
-  const uploadForIndex = async (idx, file) => {
-	  const MAX_MB = 25;
-const okTypes = [
-  "application/pdf",
-  "image/jpeg","image/png",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "text/plain"
-];
+  // Some Safari uploads send .docx as application/octet-stream
+  const isDocxByName = file?.name?.toLowerCase().endsWith(".docx");
+  const typeAllowed = okTypes.includes(file.type) || isDocxByName;
 
-if (!okTypes.includes(file.type)) {
-  setLocalError("Unsupported file type. Please upload PDF, JPG/PNG, DOCX, or TXT.");
-  setUploadingIdx(null);
-  return;
-}
-if (file.size > MAX_MB * 1024 * 1024) {
-  setLocalError(`File too large (${Math.ceil(file.size/1e6)} MB). Max ${MAX_MB} MB.`);
-  setUploadingIdx(null);
-  return;
-}
-    setUploadingIdx(idx);
-    setLocalError("");
-    try {
-      const base = `${sessionId}_${email}/question-${questionNumber}`;
-      const filePath = `${base}/req-${idx + 1}-${Date.now()}-${file.name}`;
-      const { error } = await supabase.storage.from("uploads").upload(filePath, file, { upsert: true });
-      if (error) throw error;
+  if (!typeAllowed) {
+    setLocalError("Unsupported file type. Please upload PDF, JPG/PNG, DOCX, or TXT.");
+    setUploadingIdx(null);
+    return;
+  }
+  if (file.size > MAX_MB * 1024 * 1024) {
+    setLocalError(`File too large (${Math.ceil(file.size / 1e6)} MB). Max ${MAX_MB} MB.`);
+    setUploadingIdx(null);
+    return;
+  }
 
-      setPaths(prev => {
-        const next = [...prev];
-        next[idx] = filePath;
-        return next;
-      });
-      setUploadedFiles(prev => {
-        const list = Array.isArray(prev[questionNumber]) ? [...prev[questionNumber]] : [];
-        list[idx] = filePath;
-        return { ...prev, [questionNumber]: list };
-      });
-	  setResults(prev => {
-        const next = [...prev];
-        const r = next[questionNumber - 1]?.requirements?.[idx];
-        if (r) next[questionNumber - 1].requirements[idx] = { ...r, aiFeedback: "Uploaded" };
-        return next;
-      });
+  setUploadingIdx(idx);
+  setLocalError("");
+  try {
+    const base = `${sessionId}_${email}/question-${questionNumber}`;
+    const filePath = `${base}/req-${idx + 1}-${Date.now()}-${file.name}`;
 
-    } catch (e) {
-      setLocalError(`Upload failed: ${e.message || String(e)}`);
-    } finally {
-      setUploadingIdx(null);
-    }
-  };
+    const { error } = await supabase.storage.from("uploads").upload(filePath, file, { upsert: true });
+    if (error) throw error;
+
+    setPaths((prev) => {
+      const next = [...prev];
+      next[idx] = filePath;
+      return next;
+    });
+
+    setUploadedFiles((prev) => {
+      const list = Array.isArray(prev[questionNumber]) ? [...prev[questionNumber]] : [];
+      list[idx] = filePath;
+      return { ...prev, [questionNumber]: list };
+    });
+
+    setResults((prev) => {
+      const next = [...prev];
+      const r = next[questionNumber - 1]?.requirements?.[idx];
+      if (r) next[questionNumber - 1].requirements[idx] = { ...r, aiFeedback: "Uploaded" };
+      return next;
+    });
+  } catch (e) {
+    setLocalError(`Upload failed: ${e.message || String(e)}`);
+  } finally {
+    setUploadingIdx(null);
+  }
+};
+
 
   const clearAll = () => {
     setPrecheck(null);
@@ -1300,23 +1319,27 @@ if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validat
         </div>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <label className="browse-btn">
-            📄 Choose File
-            <input
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.docx,.txt"
-              hidden
-              onChange={e => {
-                const f = e.target.files?.[0];
-                if (f) uploadForIndex(idx, f);
-              }}
-              disabled={uploadingIdx === idx}
-            />
-          </label>
-          <span style={{ color: "#fff" }}>
-            {paths[idx] ? paths[idx].split("/").pop() : "No file chosen"}
-          </span>
-        </div>
+  <label className="browse-btn">
+    📄 Choose File
+    <input
+      type="file"
+      accept=".pdf,.jpg,.jpeg,.png,.docx,.txt"
+      hidden
+      onChange={(e) => {
+        const f = e.target.files?.[0];
+        if (f) {
+          setLocalError("");
+          uploadForIndex(idx, f);
+        }
+      }}
+      disabled={uploadingIdx === idx}
+    />
+  </label>
+  <span style={{ color: "#fff" }}>
+    {paths[idx] ? paths[idx].split("/").pop() : "No file chosen"}
+  </span>
+</div>
+
       </div>
     );
   })}
@@ -1738,19 +1761,19 @@ const cleanedSummary = cleanSummary(summary);
             </tr>
           </thead>
           <tbody>
-  {breakdown.map((row) => {
-    const qIndex = questions.findIndex(q => q.number === row.questionNumber);
+  {(Array.isArray(breakdown) ? breakdown : []).map((row) => {
+    const qIndex = questions.findIndex((q) => q.number === row.questionNumber);
     const q = questions[qIndex];
 
     if (Array.isArray(row.requirementScores) && row.requirementScores.length > 0) {
       return row.requirementScores.map((scoreVal, reqIdx) => (
         <tr key={`${row.questionNumber}-${reqIdx}`}>
           <td>{row.questionNumber}</td>
-          <td>{q?.text?.slice(0, 32)}...</td>
-          <td>{row.answer}</td>
+          <td>{q?.text ? `${q.text.slice(0, 32)}...` : "-"}</td>
+          <td>{row?.answer ?? "-"}</td>
           <td>
             {q?.requirements?.[reqIdx]
-              ? q.requirements[reqIdx].slice(0, 38) + "..."
+              ? `${q.requirements[reqIdx].slice(0, 38)}...`
               : "-"}
           </td>
           <td>{scoreVal != null ? `${scoreVal}/5` : "— (Pending auditor)"}</td>
@@ -1766,17 +1789,20 @@ const cleanedSummary = cleanSummary(summary);
     return (
       <tr key={`${row.questionNumber}-summary`}>
         <td>{row.questionNumber}</td>
-        <td>{q?.text?.slice(0, 32)}...</td>
-        <td>{row.answer}</td>
+        <td>{q?.text ? `${q.text.slice(0, 32)}...` : "-"}</td>
+        <td>{row?.answer ?? "-"}</td>
         <td>-</td>
         <td>-</td>
-        <td>{typeof row.upload_feedback === "string"
-              ? row.upload_feedback.slice(0, 48)
-              : "-"}</td>
+        <td>
+          {typeof row?.upload_feedback === "string"
+            ? row.upload_feedback.slice(0, 48)
+            : "-"}
+        </td>
       </tr>
     );
   })}
 </tbody>
+
 
 
         </table>
