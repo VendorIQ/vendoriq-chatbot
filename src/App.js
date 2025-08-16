@@ -1009,20 +1009,30 @@ await apiFetch(`/api/audit/${questionNumber}/save-files`, {
 json: { email, r1Path: picked[0].path, r2Path: picked[1].path }
 });
 }
-    const res = await apiFetch(`/api/audit/${questionNumber}/validate`, {
-json: {
-  email,
-  companyProfile: profile || {},
-  ocrLang,
-  files: paths
-    .filter(Boolean)
-    .map((p, i) => ({ path: p, requirementIndex: i })),
-  requirementLabels: activeRequirements, // active only
-  totalRequirements: reqCount,           // active only
-  answer: userAnswer,
-  strict,                                // false for Q2 + No
-},
-    });
+const indicesAll = Array.from({ length: reqCount }, (_, i) => i);
+
+// Q2 + "No": only requirement 1 is required
+const isQ2No = questionNumber === 2 && String(userAnswer || "").toLowerCase() === "no";
+const requiredIndices = strict ? indicesAll : [0];
+const optionalIndices = strict ? [] : indicesAll.filter(i => i !== 0);
+
+const res = await apiFetch(`/api/audit/${questionNumber}/validate`, {
+  json: {
+    email,
+    companyProfile: profile || {},
+    ocrLang,
+    files: paths.filter(Boolean).map((p, i) => ({ path: p, requirementIndex: i })),
+    requirementLabels: activeRequirements,
+    totalRequirements: reqCount,
+    // 🔒 NEW hard gates
+    strictMapping: !!strict,          // block cross-coverage when strict
+    requireCompanyName: true,         // fail if company name not found
+    // make required vs optional explicit (esp. for Q2 + No)
+    requiredIndices,
+    optionalIndices,
+  },
+});
+
     if (!res.ok) throw new Error("Validation failed");
     const raw = await res.json();
 // Normalize server response into the rich shape expected by the UI
