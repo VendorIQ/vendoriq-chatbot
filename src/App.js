@@ -1,7 +1,7 @@
 // App.js
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AdminPage from "./Admin/AdminPage.jsx";
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef} from "react";
 import { createClient } from "@supabase/supabase-js";
 import ReactMarkdown from "react-markdown";
 import "./App.css";
@@ -20,6 +20,14 @@ const showUploadsFor = (qNum, answer) => {
   if (qNum === 2) return ans === "yes" || ans === "no";
   return ans === "yes";
 };
+// Which requirements are active for a given Q/answer?
+function getActiveRequirements(q, answer) {
+  if (!q) return [];
+  const ans = String(answer || "").toLowerCase();
+  // Q2 + "No": show ALL requirements, but only #1 is required; others shown as optional
+  if (q.number === 2 && ans === "no") return q.requirements;
+  return q.requirements || [];
+}
 
 /* --------------------- SUPABASE --------------------- */
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
@@ -467,13 +475,6 @@ function ChatApp() {
         }}
       />
     );
-  }
-
-  function getActiveRequirements(q, answer) {
-    if (!q) return [];
-    const ans = String(answer || "").toLowerCase();
-    if (q.number === 2 && ans === "no") return q.requirements;
-    return q.requirements || [];
   }
 
   const isStrictFor = (qNum, answer) =>
