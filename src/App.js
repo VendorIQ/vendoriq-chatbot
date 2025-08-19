@@ -1,5 +1,3 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import AdminPage from "./Admin/AdminPage.jsx";
 import React, { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import ReactMarkdown from "react-markdown";
@@ -8,61 +6,19 @@ import AuditorReviewPanel from "./AuditorReviewPanel";
 import AuthPage from "./AuthPage";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-const safeNum = (v, d = 2) => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n.toFixed(d) : "0.00";
-};
-// Should we show the upload/evidence block for this question/answer?
-const showUploadsFor = (qNum, answer) => {
-  const ans = String(answer || "").toLowerCase();
-  // Q2 accepts evidence for both Yes (explain issues) and No (prove clean record + system)
-  if (qNum === 2) return ans === "yes" || ans === "no";
-  // others: default behavior (only when user says Yes)
-  return ans === "yes";
-};
+
+
 // --- SUPABASE ---
 const supabase = createClient(
   process.env.REACT_APP_SUPABASE_URL,
   process.env.REACT_APP_SUPABASE_ANON_KEY
 );
-// Attach Supabase access token automatically to API requests
-async function getAccessToken() {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token || "";
-}
-async function apiFetch(
-  path,
-  { method = "POST", json, formData, headers = {} } = {}
-) {
-  const token = await getAccessToken();
-  const allHeaders = { ...headers };
-  if (token) allHeaders.Authorization = `Bearer ${token}`;
-
-  const makeUrl = (p) => `${BACKEND_URL}${p.startsWith("/") ? p : `/${p}`}`;
-
-  let fetchOptions = { method, headers: allHeaders };
-
-  if (json) {
-    allHeaders["Content-Type"] = "application/json";
-    fetchOptions = { ...fetchOptions, body: JSON.stringify(json) };
-  } else if (formData) {
-    // Do NOT set Content-Type for FormData
-    fetchOptions = { ...fetchOptions, body: formData };
-  }
-
-  const res = await fetch(makeUrl(path), fetchOptions);
-  if (res.status === 401) {
-    // Token invalid/expired -> sign out locally so UI resets cleanly
-    await supabase.auth.signOut();
-  }
-  return res; // callers already check res.ok in your code
-}
-
 
 // --- CONSTANTS ---
 const botAvatar = process.env.PUBLIC_URL + "/bot-avatar.png";
-const BACKEND_URL =
-  (process.env.REACT_APP_API_BASE || "http://localhost:8080").replace(/\/$/, "");
+const userAvatar = process.env.PUBLIC_URL + "/user-avatar.png";
+const BACKEND_URL = "https://4d66d45e-0288-4203-935e-1c5d2a182bde-00-38ratc2twzear.pike.replit.dev";
+
 // --- QUESTIONS ---
 const questions = [
   {
@@ -105,6 +61,26 @@ const questions = [
   },
 ];
 
+// --- HOURGLASS LOADER ---
+function HourglassLoader() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        margin: "22px 0 12px 0",
+        justifyContent: "flex-start",
+      }}
+    >
+      <span className="hourglass-anim" style={{ fontSize: "2.2rem", marginRight: 10 }}>
+        ⏳
+      </span>
+      <span style={{ fontSize: "1.08rem", color: "#0085CA", fontWeight: 600 }}>
+        Reviewing your document...
+      </span>
+    </div>
+  );
+}
 function formatSummary(summary) {
   if (!summary) return "";
 
@@ -128,105 +104,72 @@ function formatSummary(summary) {
 }
 	  
 // =============== MAIN APP COMPONENT ===============
-function ChatApp() {
+export default function App() {
   const [reportBreakdown, setReportBreakdown] = useState([]); // NEW
-  const chatEndRef = useRef(null);
-const timersRef = useRef([]);
-  const [bubblesComplete, setBubblesComplete] = useState(false);
-
+  const [bubblesComplete, setBubblesComplete] = useState(false); // <--- ADD THIS IF NOT DECLARED
 const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callback) => {
-  // clear any previous timers/intervals
-  timersRef.current.forEach(id => {
-    clearTimeout(id);
-    clearInterval(id);
-  });
-  timersRef.current = [];
-
-  setTyping(true);
+  setTyping(true); // <--- Mark as typing at start
   setBubblesComplete(false);
-
-  if (!messagesArray?.length) {
-    setTyping(false);
-    setBubblesComplete(true);
-    if (typeof callback === "function") callback();
-    return;
-  }
-
   let idx = 0;
-
-  const sendNext = () => {
+  function sendNext() {
     let i = 0;
     setMessages(prev => [...prev, { from, text: "" }]);
-
-    const intervalId = setInterval(() => {
+    const interval = setInterval(() => {
       setMessages(prev => {
         const newMsgs = [...prev];
         newMsgs[newMsgs.length - 1] = {
           ...newMsgs[newMsgs.length - 1],
-          text: messagesArray[idx].slice(0, i + 1),
+          text: messagesArray[idx].slice(0, i + 1)
         };
         return newMsgs;
       });
-
       i++;
       if (i >= messagesArray[idx].length) {
-        clearInterval(intervalId);
-
-        const afterType = setTimeout(() => {
+        clearInterval(interval);
+        setTimeout(() => {
           idx++;
           if (idx < messagesArray.length) {
-            timersRef.current.push(setTimeout(sendNext, delay));
-          } else {
-            const done = setTimeout(() => {
-              setTyping(false);
+            setTimeout(sendNext, delay);
+          } else if (callback) {
+            setTimeout(() => {
+              setTyping(false); // <--- Typing finished!
               setBubblesComplete(true);
-              if (callback) callback();
+              callback();
             }, delay);
-            timersRef.current.push(done);
+          } else {
+            setTimeout(() => {
+              setTyping(false); // <--- Typing finished!
+              setBubblesComplete(true);
+            }, delay);
           }
         }, 350);
-
-        timersRef.current.push(afterType);
       }
     }, 12);
-
-    timersRef.current.push(intervalId);
-  };
-
+  }
   sendNext();
 };
-useEffect(() => {
-  return () => {
-    timersRef.current.forEach(id => {
-      clearTimeout(id);
-      clearInterval(id);
-    });
-    timersRef.current = [];
-  };
-}, []);
 
 
-
-//================ AKA useState ===========================
-  const [uploadedFiles, setUploadedFiles] = useState({}); // { questionNumber: [filePath, filePath] }
-  const [showMultiUpload, setShowMultiUpload] = useState(false); // NEW: gate for multi-upload
-  const [precheck, setPrecheck] = useState(null);                // NEW: {feedback, score} from pre-check
-  const [auditResult, setAuditResult] = useState(null);          // NEW: {feedback, score} after audit
-  const [focusReqIdx, setFocusReqIdx] = useState(null);
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
+  const [typingText, setTypingText] = useState("");
   const [step, setStep] = useState(-1);
+  const [showUploads, setShowUploads] = useState(false);
   const [justAnswered, setJustAnswered] = useState(false);
   const [sessionId, setSessionId] = useState(null);
+  const [uploadReqIdx, setUploadReqIdx] = useState(0);
   const [showIntro, setShowIntro] = useState(false);
   const [summary, setSummary] = useState("");
   const [score, setScore] = useState(null);
   const [showSummary, setShowSummary] = useState(false);
   const [answers, setAnswers] = useState([]);
   const [reviewMode, setReviewMode] = useState(false);
+  const chatEndRef = useRef(null);
   const [companyName, setCompanyName] = useState("");
-
-
+  const [disagreeLoading, setDisagreeLoading] = useState(false);
+  const [showDisagreeModal, setShowDisagreeModal] = useState(false);
+  const [disagreeReason, setDisagreeReason] = useState("");
+  const [disagreeFile, setDisagreeFile] = useState(null);
   const [user, setUser] = useState(null);
   const [showProgress, setShowProgress] = useState(false);
   const [profile, setProfile] = useState(null);
@@ -242,11 +185,13 @@ useEffect(() => {
   );
 async function fetchSummary() {
         setTyping(true);
-try {
-  const response = await apiFetch(`/api/session-summary`, {
-    json: {} // backend will inject email from token
-  });
-
+        setTypingText("Generating assessment summary...");
+        try {
+          const response = await fetch(`${BACKEND_URL}/api/session-summary`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: user.email, sessionId }),
+          });
           const result = await response.json();
 		  
 		  console.log("Session summary API response:", result);
@@ -265,7 +210,8 @@ try {
           setSummary("Failed to generate summary. Please contact support.");
         }
         setTyping(false);
-        }
+        setTypingText("");
+      }
 
 	  
 function ProgressPopup({ results, questions, onJump, onClose }) {
@@ -306,59 +252,43 @@ function ProgressPopup({ results, questions, onJump, onClose }) {
             >
               Go
             </button>
-			
-			
             {/* Requirement Progress as Text */}
-{showUploadsFor(q.number, results[i]?.answer) && (
-  <ul style={{ marginLeft: 18, marginTop: 4, marginBottom: 2, paddingLeft: 0 }}>
-    {getActiveRequirements(q, results[i]?.answer).map((_, ridx) => {
-      const feedback = results[i].requirements?.[ridx]?.aiFeedback;
-      let status = "Not started";
-      let color = "#aaa";
-      switch (feedback) {
-        case "Uploaded":
-          status = "Uploaded"; color = "#157A4A"; break;
-        case "Validated":
-          status = "Validated"; color = "#157A4A"; break;
-        case "Covered by other docs":
-          status = "Covered by other docs"; color = "#0a7"; break;
-        case "Misaligned":
-          status = "Misaligned"; color = "#e67e22"; break;
-        case "Unreadable":
-          status = "Unreadable"; color = "#c00"; break;
-        case "Skipped":
-          status = "Skipped"; color = "#f39c12"; break;
-        default:
-          if (feedback) { status = feedback; color = "#157A4A"; }
-      }
-
-      return (
-        <li
-          key={ridx}
-          style={{
-            fontSize: "0.9rem",
-            color,
-            fontWeight: 600,
-            marginBottom: 1,
-            listStyle: "none",
-            cursor: "pointer",
-            textDecoration: "underline dotted",
-          }}
-          onClick={() => onJump(i, ridx)}
-          title="Jump to this requirement"
-        >
-          Requirement {ridx + 1}: {status}
-        </li>
-      );
-    })}
-  </ul>
-)}
-
-			
-			
-			
-			
-			
+            {results[i]?.answer === "Yes" && (
+              <ul style={{ marginLeft: 18, marginTop: 4, marginBottom: 2, paddingLeft: 0 }}>
+                {q.requirements.map((req, ridx) => {
+                  const feedback = results[i].requirements[ridx]?.aiFeedback;
+                  let status = "Not started";
+                  let color = "#aaa";
+                  if (feedback) {
+                    if (feedback === "Skipped") {
+                      status = "Skipped";
+                      color = "#f39c12";
+                    } else {
+                      status = "Uploaded";
+                      color = "#157A4A";
+                    }
+                  }
+                  return (
+      <li
+        key={ridx}
+        style={{
+          fontSize: "0.9rem",
+          color,
+          fontWeight: 600,
+          marginBottom: 1,
+          listStyle: "none",
+          cursor: "pointer", // add pointer
+          textDecoration: "underline dotted", // optional, to show it's clickable
+        }}
+        onClick={() => onJump(i, ridx)} // pass requirement index too!
+        title="Jump to this requirement"
+      >
+        Requirement {ridx + 1}: {status}
+      </li>
+    );
+  })}
+</ul>
+            )}
           </li>
         ))}
       </ul>
@@ -367,38 +297,13 @@ function ProgressPopup({ results, questions, onJump, onClose }) {
 }
 
 useEffect(() => {
-  // Seed initial session
+  // Get current session on load
   supabase.auth.getSession().then(({ data: { session } }) => {
-    setUser(session?.user ?? null);
+    if (session?.user) setUser(session.user);
   });
-
-  // React to future auth changes (refresh, sign-in/out)
-  const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
-    setUser(sess?.user ?? null);
-  });
-
-  return () => {
-    sub?.subscription?.unsubscribe?.();
-  };
 }, []);
 
 
-useEffect(() => {
-  if (user) {
-    supabase
-      .from('profiles')
-      .select('company_name, location_id, country, customer_unit, market_area')
-      .eq('id', user.id)
-      .single()
-      .then(({ data, error }) => {
-        if (error) {
-          console.error('Profile fetch error', error);
-        } else {
-          setProfile(data);
-        }
-      });
-  }
-}, [user]);
 
 useEffect(() => {
     // If user just logged in and there are no messages, show intro
@@ -418,82 +323,95 @@ useEffect(() => {
     }
     // eslint-disable-next-line
   }, [user]);
-   
+  
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => setProfile(data));
+    } else {
+      setProfile(null);
+    }
+  }, [user]);
+  
 
-// --- Dialog logic ---
-function getBotMessage({ step, answer, justAnswered }) {
-  if (step < 0) {
-    return [
-      "Hi there! Welcome to the VendorIQ Supplier Compliance Interview.",
-      "I’ll be your guide today—just answer a few questions, and I’ll help you every step of the way.",
-      "Let's begin!",
-    ];
-  }
+ 
 
-  const q = questions[step];
-
-  if (!justAnswered) {
-    return [
-      "Let's talk about your company's safety practices.",
-      `**Question ${q.number}:** ${q.text}`,
-    ];
-  }
-
-  if (answer === "Yes" || (q.number === 2 && answer === "No")) {
-    const optional = q.number === 2 && answer === "No";
-    return [
-      optional ? "Thanks for letting me know!" : "Awesome, thanks for letting me know!",
-      optional
-        ? "Optional evidence: upload your legal register, compliance procedure, and a signed 'no infringements in the last 3 years' statement. This can strengthen your score."
-        : "Since you answered yes, could you please upload the required documents? (You can drag and drop your files or click to upload.)",
-    ];
-  } else if (answer === "No" && q.disqualifiesIfNo) {
-    return [
-      "Thanks for your honesty!",
-      "Just so you know, having a written OHS Policy is an important requirement. Let's continue.",
-    ];
-  } else {
+  // --- Dialog logic ---
+  function getBotMessage({ step, answer, justAnswered }) {
+    if (step < 0) {
+      return [
+        "Hi there! Welcome to the VendorIQ Supplier Compliance Interview.",
+        "I’ll be your guide today—just answer a few questions, and I’ll help you every step of the way.",
+        "Let's begin!",
+      ];
+    }
+    const q = questions[step];
+    if (!justAnswered) {
+      return [
+        "Let's talk about your company's safety practices.",
+        `**Question ${q.number}:** ${q.text}`,
+      ];
+    }
+    if (answer === "Yes") {
+      return [
+        "Awesome, thanks for letting me know!",
+        "Since you answered yes, could you please upload the required documents? (You can drag and drop your files or click to upload.)",
+      ];
+    }
+    if (answer === "No" && q.disqualifiesIfNo) {
+      return [
+        "Thanks for your honesty!",
+        "Just so you know, having a written OHS Policy is an important requirement. Let's continue.",
+      ];
+    }
     return [
       "Thanks for your response!",
       "Let's move on to the next question.",
     ];
   }
-}
-
-
 // --- Save answer to backend ---
-const saveAnswerToBackend = async (questionNumber, answer) => {
+const saveAnswerToBackend = async (email, questionNumber, answer) => {
   try {
-    await apiFetch(`/api/save-answer`, {
-      json: { questionNumber, answer }
+    await fetch(`${BACKEND_URL}/api/save-answer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({ email: user.email.trim().toLowerCase(), questionNumber, answer })
     });
-
- } catch (err) {
+  } catch (err) {
     console.error("Failed to save answer:", err);
   }
 };
+ 
 
   // --- Auto-scroll chat to bottom whenever messages or typing changes ---
   useEffect(() => {
-  if (!chatEndRef.current) return;
-  const t = setTimeout(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, 50);
-  return () => clearTimeout(t);
-}, [messages, typing]);
-
+    if (chatEndRef.current) {
+		 setTimeout(() => {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }, 50); // slight delay helps avoid nav clipping
+    }
+  }, [messages, typing]);
 
   // --- Ask next question only when appropriate ---
   useEffect(() => {
-if ( step >= 0 && step < questions.length && !justAnswered && !showMultiUpload && !showIntro ) {
+    if (
+      step >= 0 &&
+      step < questions.length &&
+      !justAnswered &&
+      !showUploads &&
+      !showIntro
+    ) {
       sendBubblesSequentially(
         [`**Question ${questions[step].number}:** ${questions[step].text}`],
         "bot"
       );
     }
     // eslint-disable-next-line
-   }, [step, showMultiUpload, showIntro, justAnswered]);
-
+  }, [step, showUploads, showIntro]);
 
   // --- Show review card before summary ---
   const showReview = !showSummary && step >= questions.length && !reviewMode;
@@ -506,8 +424,6 @@ if ( step >= 0 && step < questions.length && !justAnswered && !showMultiUpload &
      }, [showSummary, user]);
 
   // --- Handle answer ---
-
-
   const handleAnswer = (answer) => {
   setMessages((prev) => [...prev, { from: "user", text: answer }]);
   setAnswers((prev) => {
@@ -521,34 +437,28 @@ if ( step >= 0 && step < questions.length && !justAnswered && !showMultiUpload &
       : res
   ));
   const questionNumber = questions[step].number;
-saveAnswerToBackend(questionNumber, answer); // token supplies email
-
+  saveAnswerToBackend(user.email, questionNumber, answer); // 🧠 Send to backend!
 
   const botMsgs = getBotMessage({ step, answer, justAnswered: true });
   sendBubblesSequentially(botMsgs, "bot", 650, () => {
-const qNum = questions[step].number;
-const shouldShow =
-  showUploadsFor(qNum, answer) &&
-  (questions[step].requirements?.length > 0);
-
-if (shouldShow) {
-  setFocusReqIdx(null);
-  setShowMultiUpload(true);
-} else {
-  setTimeout(() => {
-    if (reviewMode) {
-      setReviewMode(false);
-      setStep(questions.length);
-    } else {
-      setStep((prev) => prev + 1);
+    if (answer === "Yes" && questions[step].requirements.length > 0) {
+      setShowUploads(true);
+      } else {
+      setTimeout(() => {
+        if (reviewMode) {
+          setReviewMode(false);
+          setStep(questions.length);
+        } else {
+          setStep((prev) => prev + 1);
+        }
+        setJustAnswered(false);
+      }, 350);
     }
-    setJustAnswered(false);
-  }, 350);
-}
-
   });
+
   setJustAnswered(true);
 };
+
 if (!user) {
   return (
     <AuthPage
@@ -559,21 +469,6 @@ if (!user) {
     />
   );
 }
-function getActiveRequirements(q, answer) {
-  if (!q) return [];
-  const ans = String(answer || "").toLowerCase();
-
-  // Q2 + "No": show ALL requirements, but only #1 is required; others are optional.
-  if (q.number === 2 && ans === "no") {
-  return q.requirements; // show all; UI adds "(optional)"
-}
-
-  return q.requirements || [];
-}
-// Whether the validator/grader should enforce all listed requirements.
-// For Q2 + "No", keep validation non-strict so only #1 is required.
-const isStrictFor = (qNum, answer) =>
-  !(qNum === 2 && String(answer || "").toLowerCase() === "no");
 
 
   // --- RENDER ---
@@ -584,7 +479,7 @@ const isStrictFor = (qNum, answer) =>
         margin: "0px auto",
 		paddingTop: 40,
         fontFamily: "Inter, sans-serif",
-        background: "transparent",   // GPT gray
+        background: "#f7f8fa;",   // GPT gray
         minHeight: "100vh",
       }}
     >
@@ -663,22 +558,20 @@ const isStrictFor = (qNum, answer) =>
     
 {showProgress && (
   <ProgressPopup
-    results={results}
-    questions={questions}
-    onJump={(qIdx, reqIdx) => {
-      setStep(qIdx);
-      setShowMultiUpload(
-      showUploadsFor(questions[qIdx].number, results[qIdx]?.answer));
-      setShowSummary(false);
-      setReviewMode(false);
-      setMessages([]);
-      setShowProgress(false);
-      setFocusReqIdx(typeof reqIdx === "number" ? reqIdx : null);
-    }}
-    onClose={() => setShowProgress(false)}
-  />
+  results={results}
+  questions={questions}
+  onJump={(qIdx, reqIdx) => {
+    setStep(qIdx);
+    setUploadReqIdx(reqIdx || 0);
+    setShowUploads(true);
+    setShowSummary(false);
+    setReviewMode(false);
+    setMessages([]);
+    setShowProgress(false); // Hide popup after jump
+  }}
+  onClose={() => setShowProgress(false)}
+/>
 )}
-
 
       {/* CHAT HISTORY */}
       <div
@@ -777,48 +670,63 @@ const isStrictFor = (qNum, answer) =>
       // Re-trigger the summary fetch
       setSummary("");
       setTyping(true);
+      setTypingText("Regenerating summary...");
       // Your summary-fetch logic here (see below)
       fetchSummary();
     }}
   />
 )}
          
-           {/* MULTI UPLOAD (N docs per question) */}
-      {showMultiUpload && step < questions.length && (
-        <MultiUploadSection
-          question={questions[step]}
-          questionNumber={questions[step].number}
-          sessionId={sessionId}
-          email={user.email}
-          uploadedFiles={uploadedFiles}
-          setUploadedFiles={setUploadedFiles}
-          precheck={precheck}
-          setPrecheck={setPrecheck}
-          auditResult={auditResult}
-          setAuditResult={setAuditResult}
-          setShowMultiUpload={setShowMultiUpload}
-          setMessages={setMessages}
-          setStep={setStep}
-          setJustAnswered={setJustAnswered}
-          reviewMode={reviewMode}
-          setReviewMode={setReviewMode}
-          profile={profile}
-		  results={results}
-          setResults={setResults}
-		  focusReqIdx={focusReqIdx}
-		  userAnswer={answers[step]}
-		  activeRequirements={getActiveRequirements(questions[step], answers[step])}
-          strict={isStrictFor(questions[step].number, answers[step])}
-        />
+      {/* UPLOAD SECTION */}
+      {showUploads && step < questions.length && (
+        <UploadSection
+  question={questions[step]}
+  requirementIdx={uploadReqIdx}
+  setRequirementIdx={setUploadReqIdx}
+  onDone={() => {
+    setShowUploads(false);
+    setUploadReqIdx(0);
+    if (reviewMode) {
+      setReviewMode(false);
+      setStep(questions.length);
+    } else {
+      setStep((prev) => prev + 1);
+    }
+    setJustAnswered(false);
+  }}
+  email={user.email}
+  sessionId={sessionId}
+  questionNumber={questions[step].number}
+  companyName={companyName}     // <-- Add this!
+  setMessages={setMessages}
+  setShowUploads={setShowUploads}
+  setUploadReqIdx={setUploadReqIdx}
+  reviewMode={reviewMode}
+  setReviewMode={setReviewMode}
+  setStep={setStep}
+  setJustAnswered={setJustAnswered}
+  showDisagreeModal={showDisagreeModal} //added
+  setShowDisagreeModal={setShowDisagreeModal}
+  disagreeReason={disagreeReason}
+  setDisagreeReason={setDisagreeReason}
+  disagreeFile={disagreeFile}
+  setDisagreeFile={setDisagreeFile}
+  disagreeLoading={disagreeLoading}
+  setDisagreeLoading={setDisagreeLoading}
+  results={results}
+  setResults={setResults}
+/>
+
       )}
+
       {/* YES/NO BUTTONS */}
-            {!typing &&
-			!showMultiUpload &&
-			step >= 0 && step < questions.length &&
-			!answers[step] &&                 // ⬅️ only if not answered yet
-			messages.length > 0 &&
-			!showIntro &&
-			bubblesComplete && (
+      {!typing &&
+        !showUploads &&
+        step >= 0 &&
+        step < questions.length &&
+        messages.length > 0 &&
+        !showIntro &&
+		bubblesComplete && (
           <div style={{ marginTop: 16 }}>
             <button
   onClick={() => handleAnswer("Yes")}
@@ -868,790 +776,496 @@ const isStrictFor = (qNum, answer) =>
 		
     </div>
   );
-  
 }
 
 // --- UPLOAD SECTION ---
-function LoaderCard({ text }) {
-  return (
-    <div style={{ margin: "18px 0 10px 0" }}>
-      <div style={{ background:"#1f2a36", border:"1px solid #2e3c4a", borderRadius:10, padding:16, color:"#cfe7ff" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-          <div style={{ width:24, height:24, borderRadius:"50%", border:"3px solid #cfe7ff", borderTopColor:"#229cf9", animation:"spin 0.9s linear infinite" }} />
-          <div>
-            <div style={{ fontWeight:700 }}>{text}</div>
-            <div style={{ fontSize:"0.85rem", opacity:0.85 }}>This can take 10–30 seconds depending on file size.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
-function MultiUploadSection({
-  question,                 // { number, text, requirements:[...] }
-  questionNumber,
-  sessionId,
+function UploadSection({
+  question,
+  requirementIdx,
+  setRequirementIdx,
+  onDone,
   email,
-  uploadedFiles,
-  setUploadedFiles,
-  precheck,
-  setPrecheck,
-  auditResult,
-  setAuditResult,
-  setShowMultiUpload,
+  sessionId,
+  questionNumber,
   setMessages,
+  setShowUploads,
+  setUploadReqIdx,
+  reviewMode,
+  companyName,
+  setReviewMode,
   setStep,
   setJustAnswered,
-  reviewMode,
-  setReviewMode,
-  profile,
-  results,                 // NEW
-  setResults,              // NEW
-  focusReqIdx,
-  userAnswer,
-  // NEW:
-  activeRequirements,
-  strict = true,
+  showDisagreeModal,
+  setShowDisagreeModal,
+  disagreeReason,
+  setDisagreeReason,
+  disagreeFile,
+  setDisagreeFile,
+  disagreeLoading,
+  setDisagreeLoading,  // Use these variables directly instead of local useState
+  results,
+  setResults
 }) {
-	const reqCount = activeRequirements?.length ?? 0;
-  const [ocrLang, setOcrLang] = useState("eng");
-  const [paths, setPaths] = useState(() => uploadedFiles[questionNumber] || []); // file paths per requirement
-  const [uploadingIdx, setUploadingIdx] = useState(null);
-  const [localError, setLocalError] = useState("");
-  const [disagreeOpen, setDisagreeOpen] = useState(false);
-const [disagreeReason, setDisagreeReason] = useState("");
-const [evidenceFiles, setEvidenceFiles] = useState([]);           // NEW
-const [isSubmittingDisagree, setIsSubmittingDisagree] = useState(false); // NEW
-const [isValidating, setIsValidating] = useState(false);
-const [isAuditing, setIsAuditing] = useState(false);
+  const requirement = question.requirements[requirementIdx];
+  const [uploading, setUploading] = useState(false);
+  const [uploaded, setUploaded] = useState(false);
+  const [error, setError] = useState("");
+  const [accepted, setAccepted] = useState(false);
+const [isDragActive, setIsDragActive] = useState(false);
+const [ocrLang, setOcrLang] = useState("eng");
+const [lastFile, setLastFile] = useState(null);
 
+
+// *** ADD THIS useEffect ***
 useEffect(() => {
-	if (typeof focusReqIdx === "number") {
-	const el = document.getElementById(`req-slot-${focusReqIdx}`);
-	if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-	}
-	}, [focusReqIdx]);
-  // Ensure we render one slot per requirement (N-file)
-  // Sync paths with any previously uploaded files when revisiting/jumping via Progress
-useEffect(() => {
-  const base = uploadedFiles[questionNumber] || [];
-  const padded = Array.from({ length: reqCount || 0 }, (_, i) => base[i] || "");
-  setPaths(padded);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [questionNumber, reqCount, uploadedFiles]);
-
-
-const uploadForIndex = async (idx, file) => {
-  const MAX_MB = 25;
-  const okTypes = [
-    "application/pdf",
-    "image/jpeg",
-    "image/png",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "text/plain",
-  ];
-
-  // Some Safari uploads send .docx as application/octet-stream
-  const isDocxByName = file?.name?.toLowerCase().endsWith(".docx");
-  const typeAllowed = okTypes.includes(file.type) || isDocxByName;
-
-  if (!typeAllowed) {
-    setLocalError("Unsupported file type. Please upload PDF, JPG/PNG, DOCX, or TXT.");
-    setUploadingIdx(null);
-    return;
+  function onRetryUpload(e) {
+    const pending = e.detail;
+    // Make sure requirement context matches to avoid cross-upload bugs
+    if (
+      pending &&
+      pending.file &&
+      pending.email === email &&
+      pending.questionNumber === questionNumber &&
+      requirement === pending.requirement
+    ) {
+      // Retry the failed upload with the stored file
+      handleUpload({ target: { files: [pending.file] } });
+    }
   }
-  if (file.size > MAX_MB * 1024 * 1024) {
-    setLocalError(`File too large (${Math.ceil(file.size / 1e6)} MB). Max ${MAX_MB} MB.`);
-    setUploadingIdx(null);
+  window.addEventListener("vendorIQ:retryUpload", onRetryUpload);
+  return () => window.removeEventListener("vendorIQ:retryUpload", onRetryUpload);
+}, [email, questionNumber, requirement]); // dependencies must match current upload context
+
+  const handleUpload = async (e) => {
+  const file = e.target.files[0];
+  setLastFile(file);
+  if (!file) return;
+  setUploading(true);
+  setError("");
+
+  // 1. Upload to Supabase
+  const filePath = `uploads/${sessionId}_${email}/question-${questionNumber}/requirement-${requirementIdx + 1}-${file.name}`;
+  const { error: uploadError } = await supabase.storage.from("uploads").upload(filePath, file, { upsert: true });
+  if (uploadError) {
+    setUploading(false);
+    setError("Upload failed: " + uploadError.message);
     return;
   }
 
-  setUploadingIdx(idx);
-  setLocalError("");
+  // 2. Send to Ollama for AI feedback
   try {
-    const base = `${sessionId}_${email}/question-${questionNumber}`;
-    const filePath = `${base}/req-${idx + 1}-${Date.now()}-${file.name}`;
-
-    const { error } = await supabase.storage.from("uploads").upload(filePath, file, { upsert: true });
-    if (error) throw error;
-
-    setPaths((prev) => {
-      const next = [...prev];
-      next[idx] = filePath;
-      return next;
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("requirement", requirement);
+    formData.append("email", email);
+    formData.append("questionNumber", questionNumber);
+    formData.append("companyName", companyName);
+    formData.append("ocrLang", ocrLang); // <-- ADD THIS LINE
+    const response = await fetch(`${BACKEND_URL}/api/check-file`, {
+      method: "POST",
+      body: formData,
     });
 
-    setUploadedFiles((prev) => {
-      const list = Array.isArray(prev[questionNumber]) ? [...prev[questionNumber]] : [];
-      list[idx] = filePath;
-      return { ...prev, [questionNumber]: list };
-    });
-
-    setResults((prev) => {
-      const next = [...prev];
-      const r = next[questionNumber - 1]?.requirements?.[idx];
-      if (r) next[questionNumber - 1].requirements[idx] = { ...r, aiFeedback: "Uploaded" };
-      return next;
-    });
-  } catch (e) {
-    setLocalError(`Upload failed: ${e.message || String(e)}`);
-  } finally {
-    setUploadingIdx(null);
-  }
-};
-
-
-  const clearAll = () => {
-    setPrecheck(null);
-    setAuditResult(null);
-    setPaths(Array.from({ length: reqCount }, () => ""));
-    setUploadedFiles(prev => ({ ...prev, [questionNumber]: [] }));
-  };
-
- // 1) PRE-CHECK (AI: are these the *right* docs + aggregate coverage)
-const runPrecheck = async () => {
-  setLocalError("");
-  setIsValidating(true);
-  try {
-    const picked = paths
-      .map((p, i) => (p ? { path: p, requirementIndex: i } : null))
-      .filter(Boolean);
-
-    if (picked.length === 0) {
-      setLocalError("Please upload at least one document first.");
-      return;
-    }
-// NEW: populate r1/r2 for backward compatibility (only if we have 2+)
-if (picked.length >= 2) {
-await apiFetch(`/api/audit/${questionNumber}/save-files`, {
-json: { email, r1Path: picked[0].path, r2Path: picked[1].path }
-});
-}
-const indicesAll = Array.from({ length: reqCount }, (_, i) => i);
-
-// Q2 + "No": only requirement 1 is required
-const isQ2No = questionNumber === 2 && String(userAnswer || "").toLowerCase() === "no";
-const requiredIndices = strict ? indicesAll : [0];
-const optionalIndices = strict ? [] : indicesAll.filter(i => i !== 0);
-
-const res = await apiFetch(`/api/audit/${questionNumber}/validate`, {
-  json: {
-    email,
-    companyProfile: profile || {},
-    ocrLang,
-    files: paths.filter(Boolean).map((p, i) => ({ path: p, requirementIndex: i })),
-    requirementLabels: activeRequirements,
-    totalRequirements: reqCount,
-    // 🔒 NEW hard gates
-    strictMapping: !!strict,          // block cross-coverage when strict
-    requireCompanyName: true,         // fail if company name not found
-    // make required vs optional explicit (esp. for Q2 + No)
-    requiredIndices,
-    optionalIndices,
-  },
-});
-
-    if (!res.ok) throw new Error("Validation failed");
-    const raw = await res.json();
-// Normalize server response into the rich shape expected by the UI
-const data = raw.overall
-? raw
-: {
-overall: { status: raw.isValid ? "ok" : "fail", warnings: [], errors: raw.isValid ? [] : [raw.feedback] },
-requirements: [],
-crossRequirement: [],
-feedback: raw.feedback
-};
-setPrecheck(data);
-
-    // Update Progress popup statuses
-    setResults(prev => {
-      const next = [...prev];
-      const q = next[questionNumber - 1];
-
-      // mark uploaded items validated/misaligned/unreadable
-      if (q && Array.isArray(data?.requirements)) {
-        data.requirements.forEach(r => {
-          if (q.requirements[r.index]) {
-            q.requirements[r.index].aiFeedback =
-              r.readable === false
-                ? "Unreadable"
-                : (r.alignment?.meets ? "Validated" : "Misaligned");
-          }
-        });
-      }
-
-      // mark non-uploaded but covered items
-      if (q && Array.isArray(data?.crossRequirement)) {
-        data.crossRequirement.forEach(cr => {
-          const idx = cr.targetRequirementIndex;
-          if (q.requirements[idx]) {
-            q.requirements[idx].aiFeedback =
-              cr.coverageScore >= 0.7 ? "Covered by other docs" : "Uncovered";
-          }
-        });
-      }
-      return next;
-    });
-  } catch (e) {
-    setLocalError(e.message || "Pre-check error");
-  } finally {
-    setIsValidating(false);
-  }
-};
-
-  // 2) AUDIT (final review) – proceed even if pre-check wasn't perfect
-  const runAudit = async () => {
-  setLocalError("");
-  setIsAuditing(true);
-  try {
-    if (!paths.some(Boolean)) {
-      setLocalError("Please upload at least one document first.");
-      return;
-    }
-
-    if (precheck) {
-  const missingIdxs = (activeRequirements || [])
-    .map((_, i) => i)
-    .filter((i) => !paths[i]);
-
-  const allMissingCovered =
-    Array.isArray(precheck.crossRequirement) &&
-    missingIdxs.every((i) => {
-      const cr = precheck.crossRequirement.find(
-        (c) => c.targetRequirementIndex === i
-      );
-      return cr && (cr.coverageScore || 0) >= 0.7;
-    });
-
-  const hasUnreadable = precheck?.requirements?.some((r) => r.readable === false);
-  const hardFail = precheck?.overall?.status === "fail" && !allMissingCovered;
-
-  if (hasUnreadable || hardFail) {
-    setLocalError(
-      hasUnreadable
-        ? "Fix unreadable files before continuing."
-        : "Some requirements are neither uploaded nor sufficiently covered."
+    if (!response.ok) throw new Error("AI review failed");
+    const data = await response.json();
+	
+	 if (
+    data.requireFileRetry ||
+    (typeof data.feedback === "string" &&
+      data.feedback.toLowerCase().includes("could not be read"))
+  ) {
+    setError(
+      "Upload failed: File unreadable. Please try a different file or format (for example, scan to JPG/PNG, or convert to DOCX/PDF)."
     );
+    setUploading(false);
     return;
   }
-}
 
+    // 3. Build bubble message (requirement + feedback)
+    const botBubble = 
+      `🧾 **Question ${questionNumber}, Requirement ${requirementIdx + 1}:**\n\n` +
+      `**Requirement:**\n${requirement}\n\n` +
+      `**AI Review:**\n${data.feedback || "No feedback received."}`;
 
-    const res = await apiFetch(`/api/audit/${questionNumber}/process`, {
-      json: {
-  email,
-  companyProfile: profile || {},
-  ocrLang,
-  files: paths
-    .filter(Boolean)
-    .map((p, i) => ({ path: p, requirementIndex: i })),
-  requirementLabels: activeRequirements, // ✅ use active set
-  totalRequirements: reqCount,           // ✅ use active count
-  answer: userAnswer,
-  strict,                                // ✅ use the prop
-},
+    setMessages(prev => [...prev, { from: "bot", text: botBubble }]);
+    setUploaded(true);
+    setAccepted(false);
 
-    });
-    if (!res.ok) throw new Error("Audit failed");
-    const data = await res.json();
-
-    function extractScoreFromFeedback(feedback) {
-      const m = String(feedback || "").match(
-        /Score:\s*\w+\s*\((\d)\s*\/\s*5\)/i,
-      );
-      return m ? parseInt(m[1], 10) : null;
-    }
-
-    const apiScore = data?.score;
-    const parsedScore =
-      typeof apiScore === "number" && apiScore >= 1 && apiScore <= 5
-        ? apiScore
-        : extractScoreFromFeedback(data?.feedback);
-
-    setAuditResult({ ...data, score: parsedScore });
-    setResults((prev) => {
-      const next = [...prev];
-      next[questionNumber - 1] = {
-        ...next[questionNumber - 1],
-        questionScore: parsedScore,
-        questionFeedback: data.feedback || "",
+    // Set result for this requirement
+    setResults(prev => {
+      const updated = [...prev];
+      updated[questionNumber - 1].requirements[requirementIdx] = {
+        aiScore: data.score || null,
+        aiFeedback: data.feedback || ""
       };
-      return next;
+      return updated;
     });
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        from: "bot",
-        text: `🧠 **AI Audit (Q${questionNumber}):**\n\n${
-          data.feedback || "No feedback."
-        }`,
-      },
-    ]);
-  } catch (e) {
-    setLocalError(e.message || "Audit error");
-  } finally {
-    setIsAuditing(false);
+  } catch (err) {
+    setError("AI review failed: " + err.message);
   }
+  setUploading(false);
 };
 
-
-
-
-  // 3) User agrees – advance to next question
-  const agreeAndNext = async () => {
-try {
-// copies ai_score -> final_score and marks finalized on the server
-await apiFetch(`/api/audit/${questionNumber}/agree`, { json: {} });
-} catch (e) {
-// non-blocking UI; you can toast if you want
-console.warn("Agree finalize failed:", e);
-}
-    setShowMultiUpload(false);
-    setPrecheck(null);
-    setAuditResult(null);
-    setJustAnswered(false);
+const handleAccept = () => {
+  // If there are more requirements for this question, go to the next requirement
+  if (requirementIdx < question.requirements.length - 1) {
+    setUploadReqIdx(requirementIdx + 1);    // Move to next requirement
+    setUploaded(false);                     // Reset upload for new requirement
+    setAccepted(false);                    
+    // Do NOT hide the uploads section
+  } else {
+    // All requirements done, move to next question
+    setShowUploads(false);
+    setUploadReqIdx(0);
     if (reviewMode) {
       setReviewMode(false);
       setStep(questions.length);
     } else {
-      setStep(prev => prev + 1);
+      setStep((prev) => prev + 1);
     }
-  };
-
-  // 4) Disagree flow: request reconsideration + increment/possibly escalate
-const submitDisagree = async () => {
-  if (!disagreeReason.trim()) return;
-  try {
-    setIsSubmittingDisagree(true);
-
-    // a) Ask AI to reconsider (with optional evidence files)
-    const fd = new FormData();
-    fd.append("questionNumber", String(questionNumber));
-    fd.append("requirement", `Question ${questionNumber} overall audit`);
-    fd.append("disagreeReason", disagreeReason);
-    fd.append("ocrLang", ocrLang);
-    evidenceFiles.forEach(f => fd.append("evidence[]", f, f.name));
-
-    const ai = await apiFetch(`/api/disagree-feedback`, { formData: fd });
-    const aiJson = await ai.json();
-
-    setMessages(prev => [
-      ...prev,
-      { from: "bot", text: `🧠 **AI reconsideration:**\n\n${aiJson?.feedback || "No new feedback."}` },
-    ]);
-
-    // b) Count attempt & maybe escalate (server enforces the limit)
-    const ctr = await apiFetch(`/api/audit/${questionNumber}/disagree`, {
-      json: { userArgument: disagreeReason }
-    });
-    const cJson = await ctr.json(); // { escalated, remainingAppeals }
-
-    if (cJson.escalated) {
-      setMessages(prev => [
-        ...prev,
-        { from: "bot", text: "🚩 Escalated to Human Auditor. We’ll continue; they will finalize later." },
-      ]);
-      setResults(prev => {
-        const next = [...prev];
-        if (next[questionNumber - 1]) {
-          next[questionNumber - 1].questionScore = null;
-          next[questionNumber - 1].questionFeedback = "Pending Human Auditor";
-        }
-        return next;
-      });
-      agreeAndNext();
-      return;
-    } else {
-      setMessages(prev => [
-        ...prev,
-        { from: "bot", text: `ℹ️ You have ${cJson.remainingAppeals ?? 1} disagreement attempt(s) left for this question.` },
-      ]);
-    }
-  } catch (e) {
-    setLocalError(`Disagree error: ${e.message || String(e)}`);
-  } finally {
-    setIsSubmittingDisagree(false);
-    setDisagreeOpen(false);
-    setDisagreeReason("");
-    setEvidenceFiles([]);
+    setJustAnswered(false);
   }
 };
 
+const submitDisagreement = async () => {
+  setDisagreeLoading(true);
 
-  
-if (isValidating || isAuditing) return <LoaderCard text={isValidating ? "Validating documents…" : "Running AI audit…"} />;
-  return (
-    <div style={{ margin: "18px 0 10px 0" }}>
-      {/* OCR language */}
-      <div style={{ marginBottom: 10 }}>
-        <label htmlFor="ocr-lang" style={{ marginRight: 8, fontWeight: 500, color: "#0085CA" }}>
-          OCR language:
-        </label>
-        <select
-          id="ocr-lang"
-          value={ocrLang}
-          onChange={e => setOcrLang(e.target.value)}
-          style={{ border: "1.5px solid #b3d6f8", borderRadius: 7, padding: "3px 12px", fontSize: "0.9rem" }}
-        >
-          <option value="eng">English</option>
-          <option value="ind">Bahasa Indonesia</option>
-          <option value="vie">Vietnamese</option>
-          <option value="tha">Thai</option>
-        </select>
-      </div>
+  try {
+    const formData = new FormData();
+    formData.append("email", email);
+    formData.append("questionNumber", questionNumber);
+    formData.append("requirement", requirement);
+    formData.append("disagreeReason", disagreeReason);
+    if (disagreeFile) {
+      formData.append("file", disagreeFile);
+    }
 
-      {/* N pickers (one per requirement). If a question has 12, you’ll see 12 inputs */}
-      <div style={{ display: "grid", gap: 10 }}>
-  {Array.from({ length: Math.max(1, reqCount || 1) }).map((_, idx) => {
-    const isQ2No =
-      questionNumber === 2 &&
-      String(userAnswer || "").toLowerCase() === "no";
-
-    return (
-      <div key={idx} id={`req-slot-${idx}`} style={{ display: "grid", gap: 6 }}>
-        <div style={{ color: "#bfe3ff", fontSize: "0.85rem" }}>
-          <strong>Requirement {idx + 1}:</strong>{" "}
-          {activeRequirements?.[idx] || "Additional document"}
-          {isQ2No && idx > 0 ? " (optional)" : ""}
-        </div>
-
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-  <label className="browse-btn">
-    📄 Choose File
-    <input
-      type="file"
-      accept=".pdf,.jpg,.jpeg,.png,.docx,.txt"
-      hidden
-      onChange={(e) => {
-        const f = e.target.files?.[0];
-        if (f) {
-          setLocalError("");
-          uploadForIndex(idx, f);
-        }
-      }}
-      disabled={uploadingIdx === idx}
-    />
-  </label>
-  <span style={{ color: "#fff" }}>
-    {paths[idx] ? paths[idx].split("/").pop() : "No file chosen"}
-  </span>
-</div>
-
-      </div>
-    );
-  })}
-</div>
-
-
- {/* Before pre-check */}
-{!precheck && !auditResult && (
-  <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
-    <button
-      className="continue-btn"
-      onClick={runPrecheck}
-      disabled={isValidating || paths.filter(Boolean).length === 0}
-    >
-      🔍 Validate Documents
-    </button>
-    <button
-  className="continue-btn"
-  onClick={runAudit}
-  disabled
-  title="Run Validate Documents first so I can check cross-requirement coverage."
->
-  ▶ Continue to Audit
-</button>
-
-    <button className="upload-btn" onClick={clearAll}>♻️ Clear All</button>
-    <button
-      className="disagree-btn"
-      onClick={() => { setPrecheck(null); setAuditResult(null); setShowMultiUpload(false); }}
-    >
-      ✖ Close
-    </button>
-  </div>
-)}
-
-      {/* After pre-check: show suggestions + branch */}
-      {precheck && !auditResult && (
-  <div style={{ marginTop: 16 }}>
-    <div style={{ color: "#fff", marginBottom: 8 }}>
-      <strong>🧪 Document validation</strong>
-    </div>
-
-    {/* Overall status */}
-    <div style={{
-      background: "#1f2a36",
-      border: "1px solid #2e3c4a",
-      borderRadius: 10,
-      padding: 12,
-      color: "#cfe7ff",
-      marginBottom: 10
-    }}>
-      <div style={{ fontWeight: 700, marginBottom: 6 }}>
-        Overall: {precheck?.overall?.status === "ok" ? "✅ OK" :
-                  precheck?.overall?.status === "warn" ? "⚠️ Needs attention" :
-                  "❌ Fail"}
-      </div>
-      {!!precheck?.overall?.errors?.length && (
-        <div style={{ color: "#ffb3b3", marginTop: 4 }}>
-          <div style={{ fontWeight: 600 }}>Errors (must fix):</div>
-          <ul>{precheck.overall.errors.map((e,i)=><li key={i}>{e}</li>)}</ul>
-        </div>
-      )}
-      {!!precheck?.overall?.warnings?.length && (
-        <div style={{ color: "#ffe7a3", marginTop: 4 }}>
-          <div style={{ fontWeight: 600 }}>Warnings:</div>
-          <ul>{precheck.overall.warnings.map((w,i)=><li key={i}>{w}</li>)}</ul>
-        </div>
-      )}
-    </div>
-
-    {/* Per-requirement details */}
-    {Array.isArray(precheck?.requirements) && precheck.requirements.map((r) => (
-      <div key={r.index} style={{
-        background:"#18202b", border:"1px solid #2a3a4a", borderRadius:10,
-        padding:12, color:"#d3e8ff", marginBottom:10
-      }}>
-        <div style={{ fontWeight:700, marginBottom:6 }}>
-          Requirement {r.index + 1}: {activeRequirements?.[r.index] || "—"}
-        </div>
-
-        {/* 1) Readable / crash-check */}
-        <div style={{ marginBottom:6 }}>
-          <b>Readability:</b> {r.readable ? "✅ Readable" : "❌ Unreadable"}
-          {r.readability && (
-            <span style={{ opacity:0.8, marginLeft:8 }}>
-              ({r.readability.mime}, {r.readability.pages} pages{r.readability.ocr ? `, OCR: ${r.readability.ocr}` : ""})
-            </span>
-          )}
-        </div>
-
-        {/* 2) Alignment */}
-        <div style={{ marginBottom:6 }}>
-          <b>Alignment:</b>{" "}
-{r.alignment?.meets
-  ? `✅ Meets (confidence ${Math.round(
-      Math.min(1, Math.max(0, Number(r.alignment?.confidence ?? 0))) * 100
-    )}%)`
-  : "⚠️ Possibly misaligned"}
-
-          {Array.isArray(r.alignment?.evidence) && r.alignment.evidence.length > 0 && (
-            <ul style={{ marginTop:4 }}>
-              {r.alignment.evidence.map((e,i)=><li key={i}>{e}</li>)}
-            </ul>
-          )}
-        </div>
-
-        {/* 3) Missing required info */}
-        {!!r.missing?.length && (
-          <div style={{ marginBottom:6, color:"#ffd666" }}>
-            <b>Missing (required):</b>
-            <ul>{r.missing.map((m,i)=><li key={i}>{m}</li>)}</ul>
-          </div>
-        )}
-
-        {/* 4) More suggested */}
-        {!!r.moreSuggested?.length && (
-          <div style={{ marginBottom:6, color:"#cfe7ff" }}>
-            <b>Suggested to improve score:</b>
-            <ul>{r.moreSuggested.map((m,i)=><li key={i}>{m}</li>)}</ul>
-          </div>
-        )}
-		{/* Coverage from other uploads */}
-{r.coverage && (
-  <div style={{ marginTop:6 }}>
-    <b>Coverage from other docs:</b>{" "}
-    {r.coverage.fullyCovered
-      ? `✅ Fully covered (by ${r.coverage.coveredBy.map(n => n + 1).join(", ")} — ${Math.round((r.coverage.confidence||0)*100)}%)`
-      : r.coverage.partiallyCovered
-        ? `⚠️ Partially covered (by ${r.coverage.coveredBy.map(n => n + 1).join(", ")} — ${Math.round((r.coverage.confidence||0)*100)}%)`
-        : "—"}
-  </div>
-)}
-
-      </div>
-    ))}
-{Array.isArray(precheck?.crossRequirement) && precheck.crossRequirement.length > 0 && (
-  <div style={{
-    background:"#14202b", border:"1px solid #2a3a4a", borderRadius:10,
-    padding:12, color:"#d3e8ff", marginTop:12
-  }}>
-    <div style={{ fontWeight:700, marginBottom:6 }}>🔗 Cross-requirement coverage</div>
-    <ul style={{ margin:0, paddingLeft:18 }}>
-      {precheck.crossRequirement.map((c, i) => (
-        <li key={i} style={{ marginBottom:6 }}>
-          {(() => {
-  const uploads = Array.isArray(c.coveredByUploads)
-    ? c.coveredByUploads
-    : (typeof c.sourceIndex === "number" ? [c.sourceIndex] : []);
-  const pct = Math.round(Number(c.coverageScore ?? 0) * 100);
-  return (
-    <>
-      Requirement {c.targetRequirementIndex + 1} appears covered by uploads{" "}
-      {uploads.map(n => n + 1).join(", ") || "—"} ({pct}% confidence)
-    </>
-  );
-})()}
-
-        </li>
-      ))}
-    </ul>
-  </div>
-)}
-
-    {/* The model's Markdown summary, if provided */}
-    {precheck.feedback && (
-      <div style={{ marginTop: 10, color:"#cfe7ff" }}>
-        <ReactMarkdown>{precheck.feedback}</ReactMarkdown>
-      </div>
-    )}
-
-    {/* Actions */}
-    <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginTop:10 }}>
-      {(() => {
-  const missingIdxs = (activeRequirements || [])
-  .map((_, i) => i)
-  .filter(i => !paths[i]);
-
-  const allMissingCovered =
-    Array.isArray(precheck?.crossRequirement) &&
-    missingIdxs.every(i => {
-      const cr = precheck.crossRequirement.find(c => c.targetRequirementIndex === i);
-      return cr && (cr.coverageScore || 0) >= 0.7; // threshold
+    const res = await fetch(`${BACKEND_URL}/api/disagree-feedback`, {
+      method: "POST",
+      body: formData,
     });
 
-  const hasUnreadable = precheck?.requirements?.some(r => r.readable === false);
-  const hardFail = precheck?.overall?.status === "fail" && !allMissingCovered;
+    const result = await res.json();
+    setMessages(prev => [
+      ...prev,
+      {
+        from: "bot",
+        text: `🧠 Re-evaluated AI Feedback:\n\n${result.feedback || "No new feedback returned."}`,
+      },
+    ]);
 
-  return (
-    <button
-      className="continue-btn"
-      onClick={runAudit}
-      disabled={isAuditing || hasUnreadable || hardFail}
-      title={
-        hasUnreadable
-          ? "Fix unreadable files before continuing"
-          : hardFail
-            ? "Some requirements are neither uploaded nor covered"
-            : ""
-      }
-    >
-      ▶ Continue to Audit
-    </button>
-  );
-})()}
+    setShowDisagreeModal(false);
+    setDisagreeReason("");
+    setDisagreeFile(null);
+    // --- DO NOT advance to next requirement ---
+    // --- Instead, keep user on this requirement, let them Accept, Re-upload, or Disagree again ---
+  } catch (err) {
+    setMessages(prev => [
+      ...prev,
+      {
+        from: "bot",
+        text: `❌ Failed to reprocess disagreement: ${err.message}`,
+      },
+    ]);
+  }
 
-      <button className="upload-btn" onClick={clearAll}>📤 Re-upload</button>
-    </div>
+  setDisagreeLoading(false);
+}
+
+return (
+  <div>
+    {/* Disagree Modal is rendered globally so it's always available */}
+    {showDisagreeModal && (
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          background: "rgba(0,0,0,0.4)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 999,
+        }}
+      >
+        <form
+          onSubmit={e => {
+            e.preventDefault();
+            if (!disagreeReason.trim()) return;
+            submitDisagreement();
+          }}
+          style={{
+            background: "#fff",
+            borderRadius: 18,
+            padding: "30px 32px 24px 32px",
+            maxWidth: 420,
+            width: "92%",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.18)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
+            <span style={{ fontSize: 26, color: "#d32f2f", marginRight: 10 }}>❓</span>
+            <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "#d32f2f" }}>
+              Disagree with AI Feedback
+            </span>
+          </div>
+          <label htmlFor="disagree-reason" style={{ fontWeight: 500, marginBottom: 2 }}>
+            Your reason or argument <span style={{ color: "#d32f2f" }}>*</span>
+          </label>
+          <textarea
+            id="disagree-reason"
+            placeholder="Clearly state your reason for disagreement, with facts or references if possible..."
+            value={disagreeReason}
+            onChange={e => setDisagreeReason(e.target.value)}
+            style={{
+              width: "95%",
+              minHeight: 80,
+              resize: "vertical",
+              fontSize: "0.9rem",
+              padding: "10px",
+              borderRadius: 7,
+              border: "1.5px solid #e0e0e0",
+            }}
+            required
+          />
+          <label
+            htmlFor="disagree-file"
+            style={{
+              display: "inline-block",
+              background: "#e3f2fd",
+              color: "#333",
+              fontWeight: 500,
+              borderRadius: 7,
+              padding: "8px 22px",
+              cursor: "pointer",
+              boxShadow: "0 1px 4px #0001",
+              transition: "background 0.2s",
+              border: "1.5px solid #e0e0e0",
+              marginTop: 2,
+              marginBottom: 4,
+            }}
+          >
+            📁 Upload File
+            <input
+              id="disagree-file"
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
+              onChange={e => setDisagreeFile(e.target.files[0])}
+              style={{ display: "none" }}
+            />
+          </label>
+          <span style={{ marginLeft: 8, color: "#777", fontSize: "0.90rem" }}>
+            {disagreeFile ? disagreeFile.name : "No file chosen"}
+          </span>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 }}>
+            <button
+              type="button"
+              onClick={() => setShowDisagreeModal(false)}
+              style={{
+                background: "#f5f5f5",
+                color: "#666",
+                border: "none",
+                borderRadius: 8,
+                padding: "8px 22px",
+                fontSize: "0.9rem",
+                fontWeight: 500,
+                cursor: "pointer",
+              }}
+              disabled={disagreeLoading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{
+                background: "#d32f2f",
+                color: "#fff",
+                border: "none",
+                borderRadius: 8,
+                padding: "8px 22px",
+                fontSize: "0.9rem",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+              disabled={disagreeLoading || !disagreeReason.trim()}
+            >
+              {disagreeLoading ? "Submitting..." : "Submit"}
+            </button>
+          </div>
+        </form>
+      </div>
+    )}
+
+    {/* Main upload UI */}
+    {!uploaded && !uploading && (
+      <div
+        onDragOver={e => {
+          e.preventDefault();
+          setIsDragActive(true);
+        }}
+        onDragLeave={e => {
+          e.preventDefault();
+          setIsDragActive(false);
+        }}
+        onDrop={e => {
+          e.preventDefault();
+          setIsDragActive(false);
+          const file = e.dataTransfer.files && e.dataTransfer.files[0];
+          if (file) {
+            handleUpload({ target: { files: [file] } });
+          }
+        }}
+        style={{
+          border: isDragActive
+            ? "2.8px solid #4f5963"
+            : "1px dashed #72818f",
+          background: isDragActive
+            ? "#72818f"
+            : "#4f5963",
+          borderRadius: 22,
+          padding: "20px 0 30px 0",
+          margin: "20px 0",
+          minHeight: 134,
+          maxWidth: 500,
+          textAlign: "center",
+          transition: "all 0.17s",
+          boxShadow: isDragActive
+            ? "0 4px 18px #229cf930"
+            : "0 2px 10px #b6d9fc30",
+          cursor: "pointer",
+          display: uploaded ? "none" : "block",
+          position: "relative",
+        }}
+      >
+        <div
+          style={{
+            fontSize: "0.9rem",
+            fontWeight: 700,
+            color: "#0085CA",
+          }}
+        >
+          Requirement {requirementIdx + 1}: {requirement}
+        </div>
+        <div style={{ fontWeight: 600, color: "#999", fontSize: "0.70rem", marginTop: "10px", marginBottom: "10px" }}>
+          {isDragActive
+            ? "Drop your file here..."
+            : "Drag & drop a file here, or click Browse File below"}
+        </div>
+        <div
+          style={{
+            margin: "10px auto 0 auto",
+            color: "#0085CA",
+            fontSize: "0.90rem",
+            fontWeight: 400,
+            maxWidth: 400,
+            padding: "20px 0",
+            marginBottom: "40px",
+          }}
+        >
+        </div>
+        <div style={{ marginBottom: 10 }}>
+  <label htmlFor="ocr-lang" style={{ marginRight: 8, fontWeight: 500, color: "#0085CA" }}>
+    Select language for document text:
+  </label>
+  <select
+    id="ocr-lang"
+    value={ocrLang}
+    onChange={e => setOcrLang(e.target.value)}
+    style={{
+      border: "1.5px solid #b3d6f8",
+      borderRadius: 7,
+      padding: "3px 12px",
+      fontSize: "0.9rem",
+      color: "#333",
+    }}
+  >
+    <option value="eng">English</option>
+    <option value="ind">Bahasa Indonesia</option>
+    <option value="vie">Vietnamese</option>
+    <option value="tha">Thai</option>
+    {/* Add more as needed */}
+  </select>
+</div>
+
+        <label className="browse-btn" style={{ marginTop: 12 }}>
+          📁 Browse File
+          <input
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
+            onChange={handleUpload}
+            disabled={uploading}
+            hidden
+          />
+        </label>
+        <button
+          className="skip-btn"
+          onClick={() => {
+            setResults(prev => {
+              const updated = [...prev];
+              updated[questionNumber - 1].requirements[requirementIdx] = {
+                aiScore: null,
+                aiFeedback: "Skipped"
+              };
+              return updated;
+            });
+            setUploaded(true);
+          }}
+          disabled={uploading}
+        >
+          ⏭️ Skip Requirement
+        </button>
+      </div>
+    )}
+
+
+    {uploaded && !accepted && (
+      <div className="button-group">
+        <button className="continue-btn" onClick={handleAccept}>
+          ✅ Accept & Continue
+        </button>
+        <button className="upload-btn" onClick={() => setUploaded(false)}>
+          📄 Re-upload
+        </button>
+        <button className="disagree-btn" onClick={() => setShowDisagreeModal(true)}>
+          ❓ Disagree
+        </button>
+      </div>
+    )}
+    {uploading && <HourglassLoader />}
+    {error && (
+  <div style={{ color: "red", marginTop: 12 }}>
+    {error}
+    {error.includes("AI review failed") && lastFile && (
+      <button
+        onClick={() => handleUpload({ target: { files: [lastFile] } })}
+        disabled={uploading}
+		style={{
+          marginLeft: 14,
+          background: "#0085CA",
+          color: "#fff",
+          border: "none",
+          borderRadius: 7,
+          padding: "7px 18px",
+          fontWeight: 600,
+          fontSize: "1.01rem",
+          cursor: uploading ? "not-allowed" : "pointer",
+          opacity: uploading ? 0.6 : 1,
+        }}
+      >
+        Retry AI Review
+      </button>
+    )}
   </div>
 )}
 
-
-
-      {/* After audit: agree / retry / disagree */}
-      {auditResult && (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ color: "#157A4A", fontWeight: 700, marginBottom: 8 }}>
-  Proposed score: {(typeof auditResult.score === "number" && auditResult.score >= 1) ? auditResult.score : "—"} / 5
-</div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button className="continue-btn" onClick={agreeAndNext}>✅ Agree & Continue</button>
-            <button className="upload-btn" onClick={() => { setAuditResult(null); setPrecheck(null); }}>
-              ♻️ Re-upload & Retry Q{questionNumber}
-            </button>
-            <button className="disagree-btn" onClick={() => setDisagreeOpen(true)}>❓ Disagree</button>
-          </div>
-
-          {/* Disagree modal */}
-          {disagreeOpen && (
-            <div
-              style={{
-                position: "fixed",
-                inset: 0,
-                background: "rgba(0,0,0,0.4)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                zIndex: 9999,
-              }}
-            >
-              <div style={{ background:"#fff", borderRadius:12, padding:16, width:"min(92vw, 480px)" }}>
-  <div style={{ fontWeight:700, color:"#d32f2f", marginBottom:8 }}>
-    Disagree with AI feedback
   </div>
-
-  <textarea
-  /* smaller & consistent */
-    rows={5}  
-    placeholder="Explain your disagreement with facts or references..."
-    value={disagreeReason}
-    onChange={e => setDisagreeReason(e.target.value)}
-    style={{
-      width:"100%",
-      border:"1.5px solid #e0e0e0",
-      borderRadius:8,
-      padding:8,
-      fontSize:"0.9rem",
-      resize:"vertical"
-    }}
-  />
-
-  {/* NEW: optional evidence upload */}
-  <div style={{ marginTop:10 }}>
-    <label className="browse-btn">
-      📎 Attach evidence (PDF/JPG/PNG/DOCX) — optional
-      <input
-        type="file"
-        accept=".pdf,.jpg,.jpeg,.png,.docx"
-        multiple
-        hidden
-        onChange={e => setEvidenceFiles(Array.from(e.target.files || []))}
-      />
-    </label>
-
-    {evidenceFiles.length > 0 && (
-      <ul style={{ marginTop:6, fontSize:"0.85rem", color:"#555" }}>
-        {evidenceFiles.map((f, i) => (
-          <li key={i} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-            <span>{f.name}</span>
-            <button
-              className="upload-btn"
-              onClick={() => setEvidenceFiles(prev => prev.filter((_, idx) => idx !== i))}
-            >
-              remove
-            </button>
-          </li>
-        ))}
-      </ul>
-    )}
-  </div>
-
-  <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:10 }}>
-    <button className="upload-btn" onClick={() => setDisagreeOpen(false)} disabled={isSubmittingDisagree}>
-      Cancel
-    </button>
-    <button
-      className="disagree-btn"
-      onClick={submitDisagree}
-      disabled={!disagreeReason.trim() || isSubmittingDisagree}
-    >
-      {isSubmittingDisagree ? "Submitting…" : "Submit"}
-    </button>
-  </div>
-</div>
-
-            </div>
-          )}
-        </div>
-      )}
-
-      {localError && <div style={{ color: "red", marginTop: 10 }}>{localError}</div>}
-    </div>
-  );
+);
 }
 
 function cleanSummary(summary) {
@@ -1688,6 +1302,18 @@ function cleanSummary(summary) {
 }
 
 function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
+	const thStyle = {
+  padding: "7px 8px",
+  background: "#e7f4fc",
+  borderBottom: "2px solid #b3d6f8",
+  fontWeight: 700,
+  textAlign: "left"
+};
+const tdStyle = {
+  padding: "6px 8px",
+  borderBottom: "1px solid #dbeefd",
+  verticalAlign: "top"
+};
 const cleanedSummary = cleanSummary(summary);
   
   
@@ -1695,10 +1321,10 @@ const cleanedSummary = cleanSummary(summary);
 
   // PDF Export Handler (unchanged)
   const handlePdfExport = () => {
-  const input = document.getElementById("report-summary-download");
-  html2canvas(input, { scale: 2 }).then((canvas) => {
-  const imgData = canvas.toDataURL("image/png");
-  const pdf = new jsPDF({
+    const input = document.getElementById("report-summary-download");
+    html2canvas(input, { scale: 2 }).then((canvas) => {
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
         orientation: "portrait",
         unit: "px",
         format: [canvas.width, canvas.height],
@@ -1709,9 +1335,28 @@ const cleanedSummary = cleanSummary(summary);
   };
 
   // === 6. Helper for formatting summary (as before) ===
-  
+  function formatSummary(summary) {
+    if (!summary) return "";
 
-   
+    if (typeof summary === "object") {
+      let str = "";
+      if (Array.isArray(summary.strengths) && summary.strengths.length) {
+        str += "**Strengths:**\n";
+        for (const s of summary.strengths) str += `- ${s}\n`;
+      }
+      if (Array.isArray(summary.weaknesses) && summary.weaknesses.length) {
+        if (str) str += "\n";
+        str += "**Weaknesses:**\n";
+        for (const w of summary.weaknesses) str += `- ${w}\n`;
+      }
+      if (str) return str.trim();
+      // If no strengths/weaknesses, just show the JSON object
+      return JSON.stringify(summary, null, 2);
+    }
+    // Otherwise, it's just a string
+    return summary;
+  }
+
   return (
     <div
       style={{
@@ -1730,25 +1375,6 @@ const cleanedSummary = cleanSummary(summary);
         <h3 style={{ color: "#0085CA", marginTop: 0 }}>
           <span role="img" aria-label="report">📝</span> Compliance Report Card
         </h3>
-		{breakdown?.some(row =>
-  Array.isArray(row.requirementScores)
-    ? row.requirementScores.some(s => s == null)
-    : row.questionScore == null
-) && (
-  <div style={{
-    background: "#fff7e6",
-    border: "1px solid #ffe8b3",
-    color: "#ad6800",
-    borderRadius: 6,
-    padding: "8px 12px",
-    margin: "8px 0 14px 0",
-    fontSize: "0.85rem",
-    fontWeight: 600
-  }}>
-    Some scores are pending Human Auditor review. Your report will auto-update once finalized.
-  </div>
-)}
-
                 <table style={{ width: "100%", marginBottom: 16, borderCollapse: "collapse", background: "#f3f4f6", fontSize: "0.7rem" }}>
           <thead>
             <tr style={{ background: "#f0faff" }}>
@@ -1761,49 +1387,39 @@ const cleanedSummary = cleanSummary(summary);
             </tr>
           </thead>
           <tbody>
-  {(Array.isArray(breakdown) ? breakdown : []).map((row) => {
-    const qIndex = questions.findIndex((q) => q.number === row.questionNumber);
-    const q = questions[qIndex];
-
-    if (Array.isArray(row.requirementScores) && row.requirementScores.length > 0) {
-      return row.requirementScores.map((scoreVal, reqIdx) => (
-        <tr key={`${row.questionNumber}-${reqIdx}`}>
+  {breakdown.map((row, qIdx) =>
+    (row.requirementScores && row.requirementScores.length > 0
+      ? row.requirementScores.map((scoreVal, reqIdx) => (
+          <tr key={`${qIdx}-${reqIdx}`}>
+            <td>{row.questionNumber}</td>
+            <td>{questions[qIdx]?.text.slice(0, 32)}...</td>
+            <td>{row.answer}</td>
+            <td>
+              {questions[qIdx]?.requirements[reqIdx]
+                ? questions[qIdx].requirements[reqIdx].slice(0, 38) + "..."
+                : "-"}
+            </td>
+            <td>{scoreVal != null ? `${scoreVal}/5` : "-"}</td>
+            <td>
+              {row.upload_feedback && Array.isArray(row.upload_feedback)
+                ? (row.upload_feedback[reqIdx] || "-").slice(0, 48)
+                : (row.upload_feedback || "-").slice(0, 48)}
+            </td>
+          </tr>
+        ))
+      : (
+        <tr key={qIdx}>
           <td>{row.questionNumber}</td>
-          <td>{q?.text ? `${q.text.slice(0, 32)}...` : "-"}</td>
-          <td>{row?.answer ?? "-"}</td>
-          <td>
-            {q?.requirements?.[reqIdx]
-              ? `${q.requirements[reqIdx].slice(0, 38)}...`
-              : "-"}
-          </td>
-          <td>{scoreVal != null ? `${scoreVal}/5` : "— (Pending auditor)"}</td>
-          <td>
-            {Array.isArray(row.upload_feedback)
-              ? (row.upload_feedback[reqIdx] || "-").slice(0, 48)
-              : (row.upload_feedback || "-").slice(0, 48)}
-          </td>
+          <td>{questions[qIdx]?.text.slice(0, 32)}...</td>
+          <td>{row.answer}</td>
+          <td>-</td>
+          <td>-</td>
+          <td>{typeof row.upload_feedback === "string" ? row.upload_feedback.slice(0, 48) : "-"}</td>
         </tr>
-      ));
-    }
-
-    return (
-      <tr key={`${row.questionNumber}-summary`}>
-        <td>{row.questionNumber}</td>
-        <td>{q?.text ? `${q.text.slice(0, 32)}...` : "-"}</td>
-        <td>{row?.answer ?? "-"}</td>
-        <td>-</td>
-        <td>-</td>
-        <td>
-          {typeof row?.upload_feedback === "string"
-            ? row.upload_feedback.slice(0, 48)
-            : "-"}
-        </td>
-      </tr>
-    );
-  })}
+      )
+    )
+  )}
 </tbody>
-
-
 
         </table>
 
@@ -1976,15 +1592,3 @@ function ReviewCard({ answers, questions, onRevise, onContinue }) {
     </div>
   );
 }
-function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<ChatApp />} />
-        <Route path="/admin" element={<AdminPage />} />
-      </Routes>
-    </BrowserRouter>
-  );
-}
-
-export default App;
