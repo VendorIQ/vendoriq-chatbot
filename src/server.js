@@ -1,5 +1,3 @@
-check again
-
 require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
@@ -292,14 +290,14 @@ const allowedOrigins = [
 const corsOptions = {
   origin(origin, cb) {
     if (!origin) return cb(null, true); // allow curl/postman
-      let ok = allowedOrigins.includes(origin);
-      if (!ok) {
-        try {
-               ok = /\.vercel\.app$/i.test(new URL(origin).hostname);
-             } catch {
-               ok = false;
-             }
-           }
+    let ok = allowedOrigins.includes(origin);
+    if (!ok) {
+      try {
+        ok = /\.vercel\.app$/i.test(new URL(origin).hostname);
+      } catch {
+        ok = false;
+      }
+    }
     if (!ok) console.warn("CORS blocked origin:", origin);
     cb(null, ok);
   },
@@ -357,9 +355,10 @@ const aiLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: "Too many requests. Please slow down and try again shortly." },
+  message: {
+    error: "Too many requests. Please slow down and try again shortly.",
+  },
 });
-
 
 // login key: IP + username/email
 function loginKey(req) {
@@ -576,22 +575,27 @@ function requireUser({ matchEmail = true } = {}) {
 // Ensure tmp dir exists for multer + temp files
 if (!fs.existsSync("tmp")) fs.mkdirSync("tmp", { recursive: true });
 // --- Upload hardening helpers (TOP-LEVEL, not inside any function) ---
-const SAFE_MIMES = new Map(Object.entries({
-  pdf: "application/pdf",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  txt: "text/plain",
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  webp: "image/webp",
-  bmp: "image/bmp",
-  tif: "image/tiff",
-  tiff: "image/tiff",
-}));
+const SAFE_MIMES = new Map(
+  Object.entries({
+    pdf: "application/pdf",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    txt: "text/plain",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    bmp: "image/bmp",
+    tif: "image/tiff",
+    tiff: "image/tiff",
+  }),
+);
 
 function sanitizeFilename(name) {
   const base = path.basename(String(name || ""));
-  let clean = base.replace(/[\u0000-\u001F\u007F]/g, "").replace(/\s+/g, " ").trim();
+  let clean = base
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
   clean = clean.replace(/[^A-Za-z0-9._ -]/g, "");
   if (!clean || clean.startsWith(".")) clean = "upload";
   if (clean.length > 120) clean = clean.slice(-120);
@@ -629,7 +633,6 @@ const upload = multer({
     cb(null, true);
   },
 });
-
 
 // ---------- Embedded Questions & Scoring ----------
 const questionData = [
@@ -807,7 +810,8 @@ async function extractText(localPath, originalName, ocrLang = "eng") {
 
 // For storage downloads (buffers): write to tmp then reuse extractText
 async function extractTextFromBuffer(buf, originalName, ocrLang = "eng") {
-  const safeBase = String(Date.now()) + "-" + sanitizeFilename(originalName || "file");
+  const safeBase =
+    String(Date.now()) + "-" + sanitizeFilename(originalName || "file");
   const tmpPath = path.join("tmp", safeBase);
   fs.writeFileSync(tmpPath, buf);
   try {
@@ -1000,8 +1004,6 @@ const blobOrStreamToBuffer = async (data) => {
   });
 };
 
-
-
 // ---------- Routes ----------
 
 // Health
@@ -1036,7 +1038,9 @@ app.post(
       return res.status(401).json({ error: "Invalid credentials" });
     }
     if (!process.env.ADMIN_PASSWORD) {
-      return res.status(503).json({ error: "Admin login disabled (missing ADMIN_PASSWORD)" });
+      return res
+        .status(503)
+        .json({ error: "Admin login disabled (missing ADMIN_PASSWORD)" });
     }
 
     return res.json({ token: signAdminToken() });
@@ -1442,8 +1446,7 @@ app.post(
         cleanup();
         return res.json({
           success: false,
-          feedback:
-            `File content type (${magic || "unknown"}) does not match the file extension .${ext}. Please export a clean ${ext.toUpperCase()} and re-upload.`,
+          feedback: `File content type (${magic || "unknown"}) does not match the file extension .${ext}. Please export a clean ${ext.toUpperCase()} and re-upload.`,
           requireFileRetry: true,
         });
       }
@@ -2141,7 +2144,7 @@ app.post(
             continue;
           }
         } catch {}
-    
+
         const t = await extractTextFromBuffer(buf, `file.${ext}`, tessLang);
         texts.push(t || "");
         if ((t || "").trim()) allText += `\n\n--- FILE: ${f.path} ---\n${t}`;
@@ -2798,23 +2801,25 @@ app.post(
       if (Array.isArray(req.files) && req.files.length) {
         const parts = [];
         for (const f of req.files) {
+          try {
             try {
-              try {
-                const { fileTypeFromFile } = await import("file-type");
-                const ft = await fileTypeFromFile(f.path);
-                const ext = (f.originalname.split(".").pop() || "").toLowerCase();
-                if (ft && !mimeAllowedByExt(ext, ft.mime)) {
-                  parts.push(""); // keep index parity
-                  continue;
-                }
-              } catch {}
-              const txt = await extractText(f.path, f.originalname, tessLang);
-              parts.push(txt || "");
-            } catch {
-              parts.push("");
-            } finally {
-              try { fs.unlinkSync(f.path); } catch {}
-            }
+              const { fileTypeFromFile } = await import("file-type");
+              const ft = await fileTypeFromFile(f.path);
+              const ext = (f.originalname.split(".").pop() || "").toLowerCase();
+              if (ft && !mimeAllowedByExt(ext, ft.mime)) {
+                parts.push(""); // keep index parity
+                continue;
+              }
+            } catch {}
+            const txt = await extractText(f.path, f.originalname, tessLang);
+            parts.push(txt || "");
+          } catch {
+            parts.push("");
+          } finally {
+            try {
+              fs.unlinkSync(f.path);
+            } catch {}
+          }
         }
         fileText = parts.filter(Boolean).join("\n\n---\n");
       }
@@ -2887,16 +2892,16 @@ console.log("GROQ_MODEL is", process.env.GROQ_MODEL);
 
 // --- Auditor login (server checks env user/pass, returns Auditor JWT) ---
 app.post(
-"/api/auditor/login",
-loginDailyLimiter,
-loginBurstLimiter,
-async (req, res) => {
-const { username, password } = req.body || {};
-if (username !== AUDITOR_USER || password !== AUDITOR_PASSWORD) {
-return res.status(401).json({ error: "Invalid credentials" });
-}
-return res.json({ token: signAuditorToken() });
-},
+  "/api/auditor/login",
+  loginDailyLimiter,
+  loginBurstLimiter,
+  async (req, res) => {
+    const { username, password } = req.body || {};
+    if (username !== AUDITOR_USER || password !== AUDITOR_PASSWORD) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    return res.json({ token: signAuditorToken() });
+  },
 );
 // --- List profiles (search optional) ---
 app.get("/api/admin/profiles", requireRole(["admin"]), async (req, res) => {
@@ -2908,9 +2913,7 @@ app.get("/api/admin/profiles", requireRole(["admin"]), async (req, res) => {
   if (search) {
     // Escape commas and asterisks so user input can't break the filter
     const safe = search.replace(/([,*])/g, "\\$1");
-    query = query.or(
-      `email.ilike.*${safe}*,company_name.ilike.*${safe}*`
-    );
+    query = query.or(`email.ilike.*${safe}*,company_name.ilike.*${safe}*`);
   }
   const { data, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
@@ -2975,7 +2978,9 @@ app.post("/api/admin/create-user", requireRole(["admin"]), async (req, res) => {
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   if (err?.code === "LIMIT_UNEXPECTED_FILE") {
-  return res.status(400).json({ error: "Too many files uploaded for this field" });
+    return res
+      .status(400)
+      .json({ error: "Too many files uploaded for this field" });
   }
   if (err?.message === "Unsupported file type") {
     return res.status(400).json({ error: err.message });
