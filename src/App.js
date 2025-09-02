@@ -27,7 +27,7 @@ const questions = [
       "Does your Company have a written OHS Policy that has been approved by your top management and has been communicated throughout the organization and to your subcontractors (when applicable)?",
     disqualifiesIfNo: true,
     requirements: [
-      "A copy of the OHS Policy.",
+      "A copy of the OHS Policy. ",
       "Evidence of how the OHS Policy has been communicated to employees (if available subcontractors) (i.e. Email, training, notice boards).",
     ],
   },
