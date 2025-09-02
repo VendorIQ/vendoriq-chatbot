@@ -148,6 +148,10 @@ const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callb
   }
   sendNext();
 };
+const [qReview, setQReview] = useState({
+  open: false, loading: false, qIdx: null, score: null, feedback: ""
+});
+const [perQuestion, setPerQuestion] = useState([]); // for the final report card
 
 
   const [messages, setMessages] = useState([]);
@@ -204,7 +208,9 @@ async function fetchSummary() {
   setSummary("No summary found.");
 }
 		  setScore(result?.score ?? 0);
-          setReportBreakdown(result?.detailedScores ?? []);
+      setReportBreakdown(result?.detailedScores ?? []);
+      setPerQuestion(result?.perQuestion ?? []);     // <-- NEW
+      
 
         } catch (err) {
           setSummary("Failed to generate summary. Please contact support.");
@@ -212,7 +218,100 @@ async function fetchSummary() {
         setTyping(false);
         setTypingText("");
       }
-
+      async function runQuestionReview(qIdx) {
+        if (!user?.email) return;
+        setQReview({ open: true, loading: true, qIdx, score: null, feedback: "" });
+      
+        const res = await fetch(`${BACKEND_URL}/api/question-review`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: user.email,
+            questionNumber: questions[qIdx].number,
+          }),
+        });
+        const data = await res.json();
+      
+        setQReview({
+          open: true,
+          loading: false,
+          qIdx,
+          score: data?.score ?? null,
+          feedback: data?.feedback ?? "No feedback returned.",
+        });
+      
+        // persist the per-question score locally too
+        setResults(prev => {
+          const updated = [...prev];
+          updated[qIdx] = { ...updated[qIdx], questionScore: data?.score ?? null };
+          return updated;
+        });
+      }
+      
+      async function acknowledgeQuestion(accept, comment) {
+        if (!qReview.open || qReview.qIdx == null) return;
+        const qNum = questions[qReview.qIdx].number;
+      
+        await fetch(`${BACKEND_URL}/api/question-acknowledge`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: user.email,
+            questionNumber: qNum,
+            accept,
+            comment: comment || "",
+          }),
+        });
+      
+        if (accept) {
+          // lock in the score and continue to NEXT question
+          setQReview({ open: false, loading: false, qIdx: null, score: null, feedback: "" });
+          setResults(prev => {
+            const updated = [...prev];
+            if (updated[qReview.qIdx]) {
+              updated[qReview.qIdx].questionScore = qReview.score ?? updated[qReview.qIdx].questionScore;
+            }
+            return updated;
+          });
+          if (reviewMode) {
+            setReviewMode(false);
+            setStep(questions.length);
+          } else {
+            setStep(prev => prev + 1);
+          }
+          setJustAnswered(false);
+        } else {
+          // keep card open; user will upload improved file
+          setQReview(r => ({ ...r, loading: false }));
+        }
+      }
+      
+      async function reviseQuestionWithFile(file, userExplanation, ocrLang = "eng") {
+        if (!file || qReview.qIdx == null) return;
+        const qNum = questions[qReview.qIdx].number;
+        const form = new FormData();
+        form.append("file", file);
+        form.append("email", user.email);
+        form.append("questionNumber", qNum);
+        if (userExplanation?.trim()) form.append("userExplanation", userExplanation.trim());
+        form.append("ocrLang", ocrLang);
+      
+        setQReview(r => ({ ...r, loading: true }));
+        const resp = await fetch(`${BACKEND_URL}/api/review-answer`, { method: "POST", body: form });
+        const data = await resp.json();
+        setQReview(r => ({
+          ...r,
+          loading: false,
+          score: data?.score ?? r.score,
+          feedback: data?.feedback ?? r.feedback,
+        }));
+        setResults(prev => {
+          const updated = [...prev];
+          updated[qReview.qIdx] = { ...updated[qReview.qIdx], questionScore: data?.score ?? null };
+          return updated;
+        });
+      }
+      
 	  
 function ProgressPopup({ results, questions, onJump, onClose }) {
   return (
@@ -664,6 +763,7 @@ if (!user) {
   <FinalReportCard
     questions={questions}
     breakdown={reportBreakdown}
+    perQuestion={perQuestion} 
     summary={summary}
     score={score}
 	onRetry={() => {
@@ -676,7 +776,19 @@ if (!user) {
     }}
   />
 )}
-         
+         {qReview.open && (
+  <QuestionReviewCard
+    question={questions[qReview.qIdx]}
+    score={qReview.score}
+    feedback={qReview.feedback}
+    loading={qReview.loading}
+    onAccept={(comment) => acknowledgeQuestion(true, comment)}
+    onRequestRevision={(comment) => acknowledgeQuestion(false, comment)}
+    onUpload={(file, note, lang) => reviseQuestionWithFile(file, note, lang)}
+    onClose={() => setQReview({ open:false, loading:false, qIdx:null, score:null, feedback:"" })}
+  />
+)}
+
       {/* UPLOAD SECTION */}
       {showUploads && step < questions.length && (
         <UploadSection
@@ -686,14 +798,9 @@ if (!user) {
   onDone={() => {
     setShowUploads(false);
     setUploadReqIdx(0);
-    if (reviewMode) {
-      setReviewMode(false);
-      setStep(questions.length);
-    } else {
-      setStep((prev) => prev + 1);
-    }
-    setJustAnswered(false);
+    runQuestionReview(step);               // <-- NEW: open mid-step card
   }}
+  
   email={user.email}
   sessionId={sessionId}
   questionNumber={questions[step].number}
@@ -722,6 +829,7 @@ if (!user) {
       {/* YES/NO BUTTONS */}
       {!typing &&
         !showUploads &&
+        !qReview.open &&    
         step >= 0 &&
         step < questions.length &&
         messages.length > 0 &&
@@ -1301,7 +1409,7 @@ function cleanSummary(summary) {
   return summary;
 }
 
-function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
+function FinalReportCard({ questions, breakdown, perQuestion = [], summary, score, onRetry }) {
 	const thStyle = {
   padding: "7px 8px",
   background: "#e7f4fc",
@@ -1375,6 +1483,31 @@ const cleanedSummary = cleanSummary(summary);
         <h3 style={{ color: "#0085CA", marginTop: 0 }}>
           <span role="img" aria-label="report">📝</span> Compliance Report Card
         </h3>
+                {/* Per-Question Scores */}
+                <table style={{ width: "100%", margin: "6px 0 14px 0", borderCollapse: "collapse", background: "#fafcff", fontSize: "0.8rem" }}>
+                  <thead>
+                    <tr style={{ background: "#f0faff" }}>
+                      <th style={{ padding: 6, border: "1px solid #eee" }}>Q#</th>
+                      <th style={{ padding: 6, border: "1px solid #eee" }}>Question</th>
+                      <th style={{ padding: 6, border: "1px solid #eee" }}>Question Score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {questions.map((q, i) => (
+                      <tr key={q.number}>
+                        <td style={{ padding: 6, border: "1px solid #eee" }}>{q.number}</td>
+                        <td style={{ padding: 6, border: "1px solid #eee" }}>{q.text.slice(0, 52)}...</td>
+                        <td style={{ padding: 6, border: "1px solid #eee" }}>
+                          {perQuestion?.[i]?.questionLevelScore != null
+                            ? `${perQuestion[i].questionLevelScore}/5`
+                            : (typeof breakdown?.[i]?.numeric_score === "number"
+                                ? `${breakdown[i].numeric_score}/5`
+                                : "—")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
                 <table style={{ width: "100%", marginBottom: 16, borderCollapse: "collapse", background: "#f3f4f6", fontSize: "0.7rem" }}>
           <thead>
             <tr style={{ background: "#f0faff" }}>
@@ -1588,6 +1721,134 @@ function ReviewCard({ answers, questions, onRevise, onContinue }) {
         >
           Submit & See Final Summary
         </button>
+      </div>
+    </div>
+  );
+}
+function QuestionReviewCard({
+  question,
+  score,
+  feedback,
+  loading,
+  onAccept,
+  onRequestRevision,
+  onUpload,
+  onClose,
+}) {
+  const [comment, setComment] = useState("");
+  const [file, setFile] = useState(null);
+  const [note, setNote] = useState("");
+  const [ocrLang, setOcrLang] = useState("eng");
+
+  return (
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 14,
+        margin: "22px auto 0 auto",
+        padding: "22px 18px",
+        maxWidth: 650,
+        boxShadow: "0 2px 12px #0001",
+        color: "#223",
+        fontSize: "0.9rem",
+        textAlign: "left",
+        border: "1.5px solid #e8f3ff"
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h3 style={{ color: "#0085CA", margin: 0 }}>
+          🧮 Question-level Review
+        </h3>
+        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer" }}>×</button>
+      </div>
+
+      <div style={{ marginTop: 8, fontWeight: 600 }}>
+        {question ? question.text : "—"}
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        <span style={{
+          display: "inline-block",
+          background: "#f0faff",
+          border: "1px solid #bfe3ff",
+          color: "#0b6aa7",
+          padding: "4px 10px",
+          borderRadius: 8,
+          fontWeight: 700
+        }}>
+          Question Score: {score != null ? `${score}/5` : "—"}
+        </span>
+      </div>
+
+      <div style={{ marginTop: 14, background: "#f8fafd", padding: 12, borderRadius: 8 }}>
+        <strong>AI Feedback</strong>
+        <div style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>
+          <ReactMarkdown>{feedback || "No feedback."}</ReactMarkdown>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+        <input
+          type="text"
+          placeholder="Optional comment"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          style={{ flex: 1, border: "1px solid #e0e0e0", borderRadius: 7, padding: "8px 10px" }}
+        />
+        <button
+          onClick={() => onAccept(comment)}
+          disabled={loading}
+          style={{ background: "#3AB66B", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 700, cursor: "pointer" }}
+        >
+          {loading ? "Saving..." : "Accept & Continue"}
+        </button>
+        <button
+          onClick={() => onRequestRevision(comment)}
+          disabled={loading}
+          style={{ background: "#ffbf00", color: "#222", border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 700, cursor: "pointer" }}
+        >
+          {loading ? "…" : "Request Revision"}
+        </button>
+      </div>
+
+      <div style={{ marginTop: 16, borderTop: "1px dashed #d7e9ff", paddingTop: 12 }}>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>Improve & Reupload for this Question</div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <label style={{ background: "#e3f2fd", border: "1.5px solid #e0e0e0", borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}>
+            📁 Choose File
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
+              style={{ display: "none" }}
+              onChange={(e) => setFile(e.target.files[0] || null)}
+            />
+          </label>
+          <select
+            value={ocrLang}
+            onChange={(e) => setOcrLang(e.target.value)}
+            style={{ border: "1.5px solid #b3d6f8", borderRadius: 7, padding: "4px 10px" }}
+            title="OCR language (for scanned docs)"
+          >
+            <option value="eng">English</option>
+            <option value="ind">Bahasa Indonesia</option>
+            <option value="vie">Vietnamese</option>
+            <option value="tha">Thai</option>
+          </select>
+          <input
+            type="text"
+            placeholder="Optional note to auditor"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            style={{ flex: 1, minWidth: 180, border: "1px solid #e0e0e0", borderRadius: 7, padding: "6px 9px" }}
+          />
+          <button
+            onClick={() => file && onUpload(file, note, ocrLang)}
+            disabled={!file || loading}
+            style={{ background: "#229cf9", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 700, cursor: file && !loading ? "pointer" : "not-allowed" }}
+          >
+            {loading ? "Uploading..." : "Reupload for Re-score"}
+          </button>
+        </div>
       </div>
     </div>
   );
