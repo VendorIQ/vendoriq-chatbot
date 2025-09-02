@@ -34,7 +34,7 @@ const questions = [
   {
     number: 2,
     text:
-      "Has your Company committed any infringements to the laws or regulations concerning Occupational Health & Safety (OHS) matters in the last three (03) years or is under any current investigation by, or in discussions with, any regulatory authority in respect of any OHS matters, accident or alleged breach of OHS laws or regulations?",
+    "Have there been zero OHS infringements in the last three (03) years, and are you not currently under any investigation or regulatory discussions about OHS matters?",
     disqualifiesIfNo: false,
     requirements: [
       "A declaration from your top management that your company has not committed any infringements to the laws or regulations or is not under any current investigation by any regulatory authority in respect of any OHS matters (Statement should be signed off by CEO with official letterhead, stamp, etc.)",
