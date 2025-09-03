@@ -60,6 +60,13 @@ const questions = [
     ],
   },
 ];
+// --- fetch timeout helper (45s) ---
+function fetchWithTimeout(url, opts = {}, ms = 45000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctrl.signal })
+    .finally(() => clearTimeout(t));
+}
 
 // --- HOURGLASS LOADER ---
 function HourglassLoader() {
@@ -191,11 +198,12 @@ async function fetchSummary() {
         setTyping(true);
         setTypingText("Generating assessment summary...");
         try {
-          const response = await fetch(`${BACKEND_URL}/api/session-summary`, {
+          const response = await fetchWithTimeout(`${BACKEND_URL}/api/session-summary`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: user.email, sessionId }),
           });
+          
           const result = await response.json();
 		  
 		  console.log("Session summary API response:", result);
@@ -222,7 +230,7 @@ async function fetchSummary() {
         if (!user?.email) return;
         setQReview({ open: true, loading: true, qIdx, score: null, feedback: "" });
       
-        const res = await fetch(`${BACKEND_URL}/api/question-review`, {
+        const res = await fetchWithTimeout(`${BACKEND_URL}/api/question-review`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -230,6 +238,7 @@ async function fetchSummary() {
             questionNumber: questions[qIdx].number,
           }),
         });
+        
         const data = await res.json();
       
         setQReview({
@@ -252,7 +261,7 @@ async function fetchSummary() {
         if (!qReview.open || qReview.qIdx == null) return;
         const qNum = questions[qReview.qIdx].number;
       
-        await fetch(`${BACKEND_URL}/api/question-acknowledge`, {
+        await fetchWithTimeout(`${BACKEND_URL}/api/question-acknowledge`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -262,6 +271,7 @@ async function fetchSummary() {
             comment: comment || "",
           }),
         });
+        
       
         if (accept) {
           // lock in the score and continue to NEXT question
@@ -297,7 +307,7 @@ async function fetchSummary() {
         form.append("ocrLang", ocrLang);
       
         setQReview(r => ({ ...r, loading: true }));
-        const resp = await fetch(`${BACKEND_URL}/api/review-answer`, { method: "POST", body: form });
+        const resp = await fetchWithTimeout(`${BACKEND_URL}/api/review-answer`, { method: "POST", body: form });
         const data = await resp.json();
         setQReview(r => ({
           ...r,
@@ -475,16 +485,16 @@ useEffect(() => {
 // --- Save answer to backend ---
 const saveAnswerToBackend = async (email, questionNumber, answer) => {
   try {
-    await fetch(`${BACKEND_URL}/api/save-answer`, {
+    await fetchWithTimeout(`${BACKEND_URL}/api/save-answer`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({ email: user.email.trim().toLowerCase(), questionNumber, answer })
+      body: JSON.stringify({ email: email.trim().toLowerCase(), questionNumber, answer })
     });
   } catch (err) {
     console.error("Failed to save answer:", err);
   }
 };
- 
+
 
   // --- Auto-scroll chat to bottom whenever messages or typing changes ---
   useEffect(() => {
@@ -578,7 +588,7 @@ if (!user) {
         margin: "0px auto",
 		paddingTop: 40,
         fontFamily: "Inter, sans-serif",
-        background: "#f7f8fa;",   // GPT gray
+        backgroundColor: "transparent",   // GPT gray
         minHeight: "100vh",
       }}
     >
@@ -923,7 +933,30 @@ function UploadSection({
 const [isDragActive, setIsDragActive] = useState(false);
 const [ocrLang, setOcrLang] = useState("eng");
 const [lastFile, setLastFile] = useState(null);
+const [preview, setPreview] = useState(null); // { preview, company, lang }
+async function previewDocQuick(file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("lang", ocrLang);
+  fd.append("dpi", "200");
 
+  try {
+    const res = await fetchWithTimeout(`${BACKEND_URL}/upload`, { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || "Preview failed");
+    setPreview({ preview: data.preview, company: data.company, lang: data.lang });
+  } catch (e) {
+    setPreview({ preview: `Preview failed: ${e.message}`, company: "", lang: ocrLang });
+  }
+}
+
+async function setSupplierName(email, supplierName) {
+  await fetch(`${BACKEND_URL}/api/set-supplier-name`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, supplierName }),
+  });
+}
 
 // *** ADD THIS useEffect ***
 useEffect(() => {
@@ -942,6 +975,7 @@ useEffect(() => {
     }
   }
   window.addEventListener("vendorIQ:retryUpload", onRetryUpload);
+  
   return () => window.removeEventListener("vendorIQ:retryUpload", onRetryUpload);
 }, [email, questionNumber, requirement]); // dependencies must match current upload context
 
@@ -961,80 +995,92 @@ useEffect(() => {
     return;
   }
 
-  // 2. Send to Ollama for AI feedback
-  try {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("requirement", requirement);
-    formData.append("email", email);
-    formData.append("questionNumber", questionNumber);
-    formData.append("companyName", companyName);
-    formData.append("ocrLang", ocrLang); // <-- ADD THIS LINE
-    const response = await fetch(`${BACKEND_URL}/api/check-file`, {
-      method: "POST",
-      body: formData,
-    });
+// 2. Send to backend for AI review (with timeout) 
+try {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("requirement", requirement);
+  formData.append("email", email);
+  formData.append("questionNumber", questionNumber);
+  formData.append("companyName", companyName);
+  formData.append("ocrLang", ocrLang);
 
-    if (!response.ok) throw new Error("AI review failed");
-    const data = await response.json();
-	
-	 if (
-    data.requireFileRetry ||
-    (typeof data.feedback === "string" &&
-      data.feedback.toLowerCase().includes("could not be read"))
-  ) {
+  // If this is the LAST requirement for the question, ask backend to finalize the question-level review too.
+  const isLastReq = requirementIdx === (question.requirements.length - 1);
+  if (isLastReq) formData.append("finalizeQuestion", "true");
+
+  const response = await fetchWithTimeout(`${BACKEND_URL}/api/check-file`, {
+    method: "POST",
+    body: formData,
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.feedback || data?.error || "AI review failed");
+
+  // Company-name mismatch gate from backend
+  if (data.requireCompanyNameConfirmation) {
     setError(
-      "Upload failed: File unreadable. Please try a different file or format (for example, scan to JPG/PNG, or convert to DOCX/PDF)."
+      `Document does not clearly mention your registered company name.\n` +
+      `Registered: ${companyName || "(none)"}\n` +
+      (data.detectedCompanyName ? `Detected in file: ${data.detectedCompanyName}\n` : "") +
+      `Please re-upload a document that includes the correct name, or fix your profile name.`
     );
     setUploading(false);
     return;
   }
 
-    // 3. Build bubble message (requirement + feedback)
-    const botBubble = 
-      `🧾 **Question ${questionNumber}, Requirement ${requirementIdx + 1}:**\n\n` +
-      `**Requirement:**\n${requirement}\n\n` +
-      `**AI Review:**\n${data.feedback || "No feedback received."}`;
-
-    setMessages(prev => [...prev, { from: "bot", text: botBubble }]);
-    setUploaded(true);
-    setAccepted(false);
-
-    // Set result for this requirement
-    setResults(prev => {
-      const updated = [...prev];
-      updated[questionNumber - 1].requirements[requirementIdx] = {
-        aiScore: data.score || null,
-        aiFeedback: data.feedback || ""
-      };
-      return updated;
-    });
-  } catch (err) {
-    setError("AI review failed: " + err.message);
+  // Unreadable file gate
+  const fb = (data.feedback_no_score || data.feedback || "").toLowerCase();
+  if (data.requireFileRetry || fb.includes("could not be read")) {
+    setError(
+      "Upload failed: File unreadable. Please try a different file or format (e.g., scan to JPG/PNG, or export/print to PDF)."
+    );
+    setUploading(false);
+    return;
   }
+
+  // Compose the chat bubble using feedback_no_score + a separate score line
+  const body = data.feedback_no_score || data.feedback || "No feedback received.";
+  const scoreText = (typeof data.score === "number") ? `**Score:** ${data.score}/5\n\n` : "";
+  const botBubble =
+    `🧾 **Question ${questionNumber}, Requirement ${requirementIdx + 1}:**\n\n` +
+    `**Requirement:**\n${requirement}\n\n` +
+    `${scoreText}${body}`;
+
+  setMessages(prev => [...prev, { from: "bot", text: botBubble }]);
+  setUploaded(true);
+  setAccepted(false);
+
+  // Store per-requirement result (no double "Score:" line)
+  setResults(prev => {
+    const updated = [...prev];
+    updated[questionNumber - 1].requirements[requirementIdx] = {
+      aiScore: data.score ?? null,
+      aiFeedback: data.feedback_no_score || data.feedback || ""
+    };
+    return updated;
+  });
+
+  // If backend also returned a questionSummary (because we set finalizeQuestion=true), stash it for display later if you want.
+  // (Optional) You already call runQuestionReview() after all requirements—see Patch #4.
+} catch (err) {
+  setError("AI review failed: " + err.message);
+}
+
   setUploading(false);
 };
 
 const handleAccept = () => {
-  // If there are more requirements for this question, go to the next requirement
   if (requirementIdx < question.requirements.length - 1) {
-    setUploadReqIdx(requirementIdx + 1);    // Move to next requirement
-    setUploaded(false);                     // Reset upload for new requirement
-    setAccepted(false);                    
-    // Do NOT hide the uploads section
+    setUploadReqIdx(requirementIdx + 1);
+    setUploaded(false);
+    setAccepted(false);
   } else {
-    // All requirements done, move to next question
-    setShowUploads(false);
-    setUploadReqIdx(0);
-    if (reviewMode) {
-      setReviewMode(false);
-      setStep(questions.length);
-    } else {
-      setStep((prev) => prev + 1);
-    }
-    setJustAnswered(false);
+    // All requirements done -> open the question-level review (mid-step)
+    onDone?.(); // this calls runQuestionReview(step) in the parent
   }
 };
+
 
 const submitDisagreement = async () => {
   setDisagreeLoading(true);
@@ -1049,7 +1095,7 @@ const submitDisagreement = async () => {
       formData.append("file", disagreeFile);
     }
 
-    const res = await fetch(`${BACKEND_URL}/api/disagree-feedback`, {
+    const res = await fetchWithTimeout(`${BACKEND_URL}/api/disagree-feedback`, {
       method: "POST",
       body: formData,
     });
@@ -1163,7 +1209,7 @@ return (
             <input
               id="disagree-file"
               type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
+              accept=".pdf,.jpg,.jpeg,.png,.txt"
               onChange={e => setDisagreeFile(e.target.files[0])}
               style={{ display: "none" }}
             />
@@ -1299,17 +1345,30 @@ return (
     <option value="tha">Thai</option>
     {/* Add more as needed */}
   </select>
-</div>
+        </div>
+
+        {preview && (
+          <div style={{ marginTop: 10, background: "#f8fafd", padding: 10, borderRadius: 8, maxWidth: 500 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6, color: "#0085CA" }}>Quick Preview</div>
+            <div style={{ fontSize: "0.8rem", color: "#555", marginBottom: 6 }}>
+              Detected company: <b>{preview.company || "—"}</b> &nbsp;•&nbsp; OCR lang: <b>{preview.lang}</b>
+            </div>
+            <div style={{ maxHeight: 120, overflow: "auto", whiteSpace: "pre-wrap", fontSize: "0.8rem" }}>
+              {preview.preview || "—"}
+            </div>
+          </div>
+        )}
 
         <label className="browse-btn" style={{ marginTop: 12 }}>
           📁 Browse File
           <input
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
-            onChange={handleUpload}
-            disabled={uploading}
-            hidden
-          />
+  type="file"
+  accept=".pdf,.jpg,.jpeg,.png"
+  onChange={(e) => setFile(e.target.files?.[0] || null)}
+  hidden
+/>
+
+
         </label>
         <button
           className="skip-btn"
@@ -1817,11 +1876,14 @@ function QuestionReviewCard({
           <label style={{ background: "#e3f2fd", border: "1.5px solid #e0e0e0", borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}>
             📁 Choose File
             <input
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
-              style={{ display: "none" }}
-              onChange={(e) => setFile(e.target.files[0] || null)}
-            />
+
+type="file"
+accept=".pdf,.jpg,.jpeg,.png"
+onChange={(e) => setFile(e.target.files?.[0] || null)}
+hidden
+/>
+
+
           </label>
           <select
             value={ocrLang}
