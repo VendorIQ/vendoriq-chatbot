@@ -934,6 +934,15 @@ const [isDragActive, setIsDragActive] = useState(false);
 const [ocrLang, setOcrLang] = useState("eng");
 const [lastFile, setLastFile] = useState(null);
 const [preview, setPreview] = useState(null); // { preview, company, lang }
+
+// --- advanced extraction flags (frontend -> backend) ---
+const [deepScan, setDeepScan] = useState(true);
+const [forceOCR, setForceOCR] = useState(false);
+const [renderDPI, setRenderDPI] = useState(220);
+const [extractSignatures, setExtractSignatures] = useState(true);
+const [autoRescanOnWeak, setAutoRescanOnWeak] = useState(true);
+const [forceNextDeepScan, setForceNextDeepScan] = useState(false);
+
 async function previewDocQuick(file) {
   const fd = new FormData();
   fd.append("file", file);
@@ -980,7 +989,7 @@ useEffect(() => {
 }, [email, questionNumber, requirement]); // dependencies must match current upload context
 
   const handleUpload = async (e) => {
-  const file = e.target.files[0];
+  const file = e?.target?.files?.[0];
   setLastFile(file);
   if (!file) return;
   setUploading(true);
@@ -1009,12 +1018,21 @@ try {
   const isLastReq = requirementIdx === (question.requirements.length - 1);
   if (isLastReq) formData.append("finalizeQuestion", "true");
 
-  const response = await fetchWithTimeout(`${BACKEND_URL}/api/check-file`, {
-    method: "POST",
-    body: formData,
-  });
+// NEW: send advanced extraction flags
+const effectiveDeepScan = forceNextDeepScan || deepScan;
+formData.append("deepScan", String(effectiveDeepScan));
+formData.append("forceOCR", String(forceOCR));
+formData.append("renderDPI", String(renderDPI));
+formData.append("extractSignatures", String(extractSignatures));
 
-  const data = await response.json();
+const response = await fetchWithTimeout(`${BACKEND_URL}/api/check-file`, {
+  method: "POST",
+  body: formData,
+});
+
+let data = await response.json();   // <-- was `const`, make it `let`
+setForceNextDeepScan(false);
+
   if (!response.ok) throw new Error(data?.feedback || data?.error || "AI review failed");
 
   // Company-name mismatch gate from backend
@@ -1039,13 +1057,61 @@ try {
     return;
   }
 
-  // Compose the chat bubble using feedback_no_score + a separate score line
-  const body = data.feedback_no_score || data.feedback || "No feedback received.";
-  const scoreText = (typeof data.score === "number") ? `**Score:** ${data.score}/5\n\n` : "";
-  const botBubble =
-    `🧾 **Question ${questionNumber}, Requirement ${requirementIdx + 1}:**\n\n` +
-    `**Requirement:**\n${requirement}\n\n` +
-    `${scoreText}${body}`;
+  // Auto-rescan if weak / signature-only
+let didAutoRescan = false;
+if (
+  autoRescanOnWeak &&
+  lastFile &&
+  (
+    (typeof data.score === "number" && data.score <= 2) ||
+    /\b(signature|signed email|email body|gmail|outlook)\b/i.test(
+      (data.feedback_no_score || data.feedback || "")
+    )
+  )
+) {
+  const retryFd = new FormData();
+  retryFd.append("file", lastFile);
+  retryFd.append("requirement", requirement);
+  retryFd.append("email", email);
+  retryFd.append("questionNumber", questionNumber);
+  retryFd.append("companyName", companyName);
+  retryFd.append("ocrLang", ocrLang);
+  retryFd.append("deepScan", "true");
+  retryFd.append("forceOCR", "true");
+  retryFd.append("renderDPI", String(renderDPI || 220));
+  retryFd.append("extractSignatures", "true");
+
+  try {
+    const retryResp = await fetchWithTimeout(`${BACKEND_URL}/api/check-file`, { method: "POST", body: retryFd });
+    const retryData = await retryResp.json();
+    if (retryResp.ok) { data = retryData; didAutoRescan = true; }
+  } catch {}
+}
+
+// Build bubble (with extras if present)
+const body = data.feedback_no_score || data.feedback || "No feedback received.";
+const scoreText = (typeof data.score === "number") ? `**Score:** ${data.score}/5\n\n` : "";
+
+const extras = [];
+if (data.signature_info?.count) {
+  extras.push(`**Signatures found:** ${data.signature_info.count}` + (data.signature_info.names?.length ? ` (e.g., ${data.signature_info.names.slice(0,2).join(", ")})` : ""));
+}
+if (Array.isArray(data.policy_headings) && data.policy_headings.length) {
+  extras.push(`**Detected headings:** ${data.policy_headings.slice(0,4).join(" • ")}`);
+}
+if (typeof data.company_name_in_doc === "string") {
+  extras.push(`**Company detected in policy:** ${data.company_name_in_doc || "—"}`);
+}
+if (didAutoRescan) {
+  extras.push("_Auto-rescanned with deep OCR due to weak first pass._");
+}
+
+const botBubble =
+  `🧾 **Question ${questionNumber}, Requirement ${requirementIdx + 1}:**\n\n` +
+  `**Requirement:**\n${requirement}\n\n` +
+  `${scoreText}${body}` +
+  (extras.length ? `\n\n${extras.map(x => `• ${x}`).join("\n")}` : "");
+
 
   setMessages(prev => [...prev, { from: "bot", text: botBubble }]);
   setUploaded(true);
@@ -1343,8 +1409,44 @@ return (
     <option value="ind">Bahasa Indonesia</option>
     <option value="vie">Vietnamese</option>
     <option value="tha">Thai</option>
+    <option value="hi">Hindi</option>
     {/* Add more as needed */}
   </select>
+  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:6, color:"#cfe6ff" }}>
+  <label style={{ display:"flex", alignItems:"center", gap:8 }}>
+    <input type="checkbox" checked={deepScan} onChange={e=>setDeepScan(e.target.checked)} />
+    Deep scan (page-image OCR)
+  </label>
+  <label style={{ display:"flex", alignItems:"center", gap:8 }}>
+    <input type="checkbox" checked={extractSignatures} onChange={e=>setExtractSignatures(e.target.checked)} />
+    Extract signatures
+  </label>
+  <label style={{ display:"flex", alignItems:"center", gap:8 }}>
+    <input type="checkbox" checked={forceOCR} onChange={e=>setForceOCR(e.target.checked)} />
+    Force OCR even if text exists
+  </label>
+  <label style={{ display:"flex", alignItems:"center", gap:8 }}>
+    DPI:&nbsp;
+    <input
+      type="number"
+      min={150}
+      max={300}
+      value={renderDPI}
+      onChange={e=>setRenderDPI(Number(e.target.value||220))}
+      style={{ width:70, border:"1px solid #b3d6f8", borderRadius:7, padding:"2px 6px" }}
+      title="Rasterization DPI for OCR"
+    />
+  </label>
+  <label style={{ display:"flex", alignItems:"center", gap:8 }}>
+  <input
+    type="checkbox"
+    checked={autoRescanOnWeak}
+    onChange={e => setAutoRescanOnWeak(e.target.checked)}
+  />
+  Auto-rescan on weak score
+</label>
+
+</div>
         </div>
 
         {preview && (
@@ -1411,10 +1513,11 @@ return (
     {error && (
   <div style={{ color: "red", marginTop: 12 }}>
     {error}
-    {error.includes("AI review failed") && lastFile && (
-      <button
-        onClick={() => handleUpload({ target: { files: [lastFile] } })}
-        disabled={uploading}
+    {(/AI review failed/i.test(error) || /unreadable/i.test(error)) && lastFile && (
+  <>
+    <button
+      onClick={() => handleUpload({ target: { files: [lastFile] } })}
+      disabled={uploading}
 		style={{
           marginLeft: 14,
           background: "#0085CA",
@@ -1430,7 +1533,30 @@ return (
       >
         Retry AI Review
       </button>
-    )}
+<button
+      onClick={() => {
+        setForceNextDeepScan(true);
+        setForceOCR(true);
+        setExtractSignatures(true);
+        setTimeout(() => handleUpload({ target: { files: [lastFile] } }), 0);
+      }}
+      disabled={uploading}
+      style={{
+        marginLeft: 10,
+        background: "#ffbf00",
+        color: "#222",
+        border: "none",
+        borderRadius: 7,
+        padding: "7px 18px",
+        fontWeight: 700,
+        fontSize: "0.95rem",
+        cursor: "pointer"
+      }}
+    >
+      Smart Rescan (OCR + Signatures)
+    </button>
+  </>
+)}
   </div>
 )}
 
@@ -1881,7 +2007,7 @@ function QuestionReviewCard({
             <input
 
 type="file"
-accept=".pdf,.jpg,.jpeg,.png"
+accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff"
 onChange={(e) => setFile(e.target.files?.[0] || null)}
 hidden
 />
