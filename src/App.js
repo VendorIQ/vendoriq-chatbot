@@ -942,6 +942,8 @@ const [renderDPI, setRenderDPI] = useState(220);
 const [extractSignatures, setExtractSignatures] = useState(true);
 const [autoRescanOnWeak, setAutoRescanOnWeak] = useState(true);
 const [forceNextDeepScan, setForceNextDeepScan] = useState(false);
+// simple drawer for rarely used options
+const [showAdvanced, setShowAdvanced] = useState(false);
 
 async function previewDocQuick(file) {
   const fd = new FormData();
@@ -1019,54 +1021,61 @@ try {
   if (isLastReq) formData.append("finalizeQuestion", "true");
 
 // NEW: send advanced extraction flags
-const effectiveDeepScan = forceNextDeepScan || deepScan;
-formData.append("deepScan", String(effectiveDeepScan));
-formData.append("forceOCR", String(forceOCR));
+// Default to deep scan; Smart Rescan can force it on for one run.
+const wantDeepScan = forceNextDeepScan || (showAdvanced ? deepScan : true);
+const wantForceOCR = showAdvanced ? forceOCR : false;
+
+
+formData.append("deepScan", String(wantDeepScan));
+formData.append("forceOCR", String(wantForceOCR));
 formData.append("renderDPI", String(renderDPI));
 formData.append("extractSignatures", String(extractSignatures));
 
-const response = await fetchWithTimeout(`${BACKEND_URL}/api/check-file`, {
-  method: "POST",
-  body: formData,
-});
+// --- send to backend ---
+const response = await fetchWithTimeout(
+  `${BACKEND_URL}/api/check-file`,
+  { method: "POST", body: formData }
+);
 
-let data = await response.json();   // <-- was `const`, make it `let`
+let data = await response.json();
+if (!response.ok) {
+  throw new Error(data?.feedback || data?.error || "AI review failed");
+}
+
+// one-shot override consumed
 setForceNextDeepScan(false);
 
-  if (!response.ok) throw new Error(data?.feedback || data?.error || "AI review failed");
+// Optional UX gates
+if (data.requireCompanyNameConfirmation) {
+  setError(
+    `Document does not clearly mention your registered company name.\n` +
+    `Registered: ${companyName || "(none)"}\n` +
+    (data.detectedCompanyName ? `Detected in file: ${data.detectedCompanyName}\n` : "") +
+    `Please re-upload a document that includes the correct name, or fix your profile name.`
+  );
+  setUploading(false);
+  return;
+}
 
-  // Company-name mismatch gate from backend
-  if (data.requireCompanyNameConfirmation) {
-    setError(
-      `Document does not clearly mention your registered company name.\n` +
-      `Registered: ${companyName || "(none)"}\n` +
-      (data.detectedCompanyName ? `Detected in file: ${data.detectedCompanyName}\n` : "") +
-      `Please re-upload a document that includes the correct name, or fix your profile name.`
-    );
-    setUploading(false);
-    return;
-  }
+const fb = (data.feedback_no_score || data.feedback || "").toLowerCase();
+if (data.requireFileRetry || fb.includes("could not be read")) {
+  setError(
+    "Upload failed: File unreadable. Please try a different file or format (e.g., scan to JPG/PNG, or export/print to PDF)."
+  );
+  setUploading(false);
+  return;
+}
 
-  // Unreadable file gate
-  const fb = (data.feedback_no_score || data.feedback || "").toLowerCase();
-  if (data.requireFileRetry || fb.includes("could not be read")) {
-    setError(
-      "Upload failed: File unreadable. Please try a different file or format (e.g., scan to JPG/PNG, or export/print to PDF)."
-    );
-    setUploading(false);
-    return;
-  }
 
-  // Auto-rescan if weak / signature-only
+// Auto-rescan once if first pass looks weak and we didn't already force OCR
 let didAutoRescan = false;
 if (
   autoRescanOnWeak &&
+  !wantForceOCR &&
   lastFile &&
   (
     (typeof data.score === "number" && data.score <= 2) ||
-    /\b(signature|signed email|email body|gmail|outlook)\b/i.test(
-      (data.feedback_no_score || data.feedback || "")
-    )
+    /\b(signature|signed email|email body|gmail|outlook)\b/i.test(fb)
   )
 ) {
   const retryFd = new FormData();
@@ -1088,11 +1097,13 @@ if (
   } catch {}
 }
 
+
 // Build bubble (with extras if present)
 const body = data.feedback_no_score || data.feedback || "No feedback received.";
 const scoreText = (typeof data.score === "number") ? `**Score:** ${data.score}/5\n\n` : "";
 
 const extras = [];
+extras.push(`**Mode:** ${wantDeepScan ? "Smart Deep Scan" : "Text-only"}`);
 if (data.signature_info?.count) {
   extras.push(`**Signatures found:** ${data.signature_info.count}` + (data.signature_info.names?.length ? ` (e.g., ${data.signature_info.names.slice(0,2).join(", ")})` : ""));
 }
@@ -1390,64 +1401,70 @@ return (
         >
         </div>
         <div style={{ marginBottom: 10 }}>
-  <label htmlFor="ocr-lang" style={{ marginRight: 8, fontWeight: 500, color: "#0085CA" }}>
-    Select language for document text:
+  <div style={{ fontWeight: 700, color: "#cfe6ff", marginBottom: 6 }}>
+    We’ll run a <span style={{ color:"#fff" }}>Smart Deep Scan</span> automatically
+  </div>
+  <div style={{ color:"#d6e9ff", fontSize: "0.85rem", marginBottom: 8 }}>
+    Finds policy titles, headings, stamps/signatures, and hidden text.
+  </div>
+
+  <label htmlFor="ocr-lang" style={{ marginRight: 8, fontWeight: 500, color: "#cfe6ff" }}>
+    Document language (for OCR):
   </label>
   <select
     id="ocr-lang"
     value={ocrLang}
     onChange={e => setOcrLang(e.target.value)}
-    style={{
-      border: "1.5px solid #b3d6f8",
-      borderRadius: 7,
-      padding: "3px 12px",
-      fontSize: "0.9rem",
-      color: "#333",
-    }}
+    style={{ border: "1.5px solid #b3d6f8", borderRadius: 7, padding: "3px 12px", fontSize: "0.9rem", color:"#333", background:"#fff" }}
   >
     <option value="eng">English</option>
     <option value="ind">Bahasa Indonesia</option>
     <option value="vie">Vietnamese</option>
     <option value="tha">Thai</option>
     <option value="hi">Hindi</option>
-    {/* Add more as needed */}
   </select>
-  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:6, color:"#cfe6ff" }}>
-  <label style={{ display:"flex", alignItems:"center", gap:8 }}>
-    <input type="checkbox" checked={deepScan} onChange={e=>setDeepScan(e.target.checked)} />
-    Deep scan (page-image OCR)
-  </label>
-  <label style={{ display:"flex", alignItems:"center", gap:8 }}>
-    <input type="checkbox" checked={extractSignatures} onChange={e=>setExtractSignatures(e.target.checked)} />
-    Extract signatures
-  </label>
-  <label style={{ display:"flex", alignItems:"center", gap:8 }}>
-    <input type="checkbox" checked={forceOCR} onChange={e=>setForceOCR(e.target.checked)} />
-    Force OCR even if text exists
-  </label>
-  <label style={{ display:"flex", alignItems:"center", gap:8 }}>
-    DPI:&nbsp;
-    <input
-      type="number"
-      min={150}
-      max={300}
-      value={renderDPI}
-      onChange={e=>setRenderDPI(Number(e.target.value||220))}
-      style={{ width:70, border:"1px solid #b3d6f8", borderRadius:7, padding:"2px 6px" }}
-      title="Rasterization DPI for OCR"
-    />
-  </label>
-  <label style={{ display:"flex", alignItems:"center", gap:8 }}>
-  <input
-    type="checkbox"
-    checked={autoRescanOnWeak}
-    onChange={e => setAutoRescanOnWeak(e.target.checked)}
-  />
-  Auto-rescan on weak score
-</label>
 
+  {/* Advanced options (optional) */}
+  <div style={{ marginTop: 10 }}>
+    <button
+      type="button"
+      onClick={() => setShowAdvanced(v => !v)}
+      style={{ background:"transparent", color:"#cfe6ff", border:"1px dashed #8fc8ff", borderRadius:8, padding:"6px 10px", fontSize:"0.85rem", cursor:"pointer" }}
+      aria-expanded={showAdvanced}
+    >
+      {showAdvanced ? "▲ Hide Advanced" : "▼ Advanced (optional)"}
+    </button>
+
+    {showAdvanced && (
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:10, color:"#cfe6ff", background:"#435262", border:"1px solid #8fc8ff33", borderRadius:10, padding:12 }}>
+        <label style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <input type="checkbox" checked={extractSignatures} onChange={e=>setExtractSignatures(e.target.checked)} />
+          Detect signatures / stamps
+        </label>
+        <label style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <input type="checkbox" checked={forceOCR} onChange={e=>setForceOCR(e.target.checked)} />
+          Force OCR (ignore embedded text)
+        </label>
+        <label style={{ display:"flex", alignItems:"center", gap:8 }}>
+          OCR quality (DPI):&nbsp;
+          <input
+            type="number"
+            min={150}
+            max={300}
+            value={renderDPI}
+            onChange={e=>setRenderDPI(Number(e.target.value||220))}
+            style={{ width:70, border:"1px solid #b3d6f8", borderRadius:7, padding:"2px 6px", background:"#fff", color:"#333" }}
+          />
+        </label>
+        <label style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <input type="checkbox" checked={autoRescanOnWeak} onChange={e => setAutoRescanOnWeak(e.target.checked)} />
+          Auto-rescan on weak score
+        </label>
+      </div>
+    )}
+  </div>
 </div>
-        </div>
+
 
         {preview && (
           <div style={{ marginTop: 10, background: "#f8fafd", padding: 10, borderRadius: 8, maxWidth: 500 }}>
@@ -1465,7 +1482,7 @@ return (
           📁 Browse File
           <input
   type="file"
-  accept=".pdf,.jpg,.jpeg,.png"
+  accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff"
   onChange={(e) => {
     const f = e.target.files?.[0];
     if (f) previewDocQuick(f);
@@ -1473,7 +1490,6 @@ return (
   }}
   hidden
 />
-
         </label>
         <button
           className="skip-btn"
