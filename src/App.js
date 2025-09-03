@@ -1364,10 +1364,13 @@ return (
           <input
   type="file"
   accept=".pdf,.jpg,.jpeg,.png"
-  onChange={(e) => setFile(e.target.files?.[0] || null)}
+  onChange={(e) => {
+    const f = e.target.files?.[0];
+    if (f) previewDocQuick(f);
+    handleUpload(e);
+  }}
   hidden
 />
-
 
         </label>
         <button
