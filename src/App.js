@@ -16,6 +16,7 @@ const supabase = createClient(
 
 // --- CONSTANTS ---
 const botAvatar = process.env.PUBLIC_URL + "/bot-avatar.png";
+const userAvatar = process.env.PUBLIC_URL + "/user-avatar.png";
 const BACKEND_URL = "https://4d66d45e-0288-4203-935e-1c5d2a182bde-00-38ratc2twzear.pike.replit.dev";
 
 // --- QUESTIONS ---
@@ -26,14 +27,14 @@ const questions = [
       "Does your Company have a written OHS Policy that has been approved by your top management and has been communicated throughout the organization and to your subcontractors (when applicable)?",
     disqualifiesIfNo: true,
     requirements: [
-      "A copy of the OHS Policy. ",
+      "A copy of the OHS Policy.",
       "Evidence of how the OHS Policy has been communicated to employees (if available subcontractors) (i.e. Email, training, notice boards).",
     ],
   },
   {
     number: 2,
     text:
-    "Have there been zero OHS infringements in the last three (03) years, and are you not currently under any investigation or regulatory discussions about OHS matters?",
+      "Has your Company committed any infringements to the laws or regulations concerning Occupational Health & Safety (OHS) matters in the last three (03) years or is under any current investigation by, or in discussions with, any regulatory authority in respect of any OHS matters, accident or alleged breach of OHS laws or regulations?",
     disqualifiesIfNo: false,
     requirements: [
       "A declaration from your top management that your company has not committed any infringements to the laws or regulations or is not under any current investigation by any regulatory authority in respect of any OHS matters (Statement should be signed off by CEO with official letterhead, stamp, etc.)",
@@ -59,13 +60,6 @@ const questions = [
     ],
   },
 ];
-// --- fetch timeout helper (45s) ---
-function fetchWithTimeout(url, opts = {}, ms = 45000) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
-  return fetch(url, { ...opts, signal: ctrl.signal })
-    .finally(() => clearTimeout(t));
-}
 
 // --- HOURGLASS LOADER ---
 function HourglassLoader() {
@@ -154,14 +148,11 @@ const sendBubblesSequentially = (messagesArray, from = "bot", delay = 650, callb
   }
   sendNext();
 };
-const [qReview, setQReview] = useState({
-  open: false, loading: false, qIdx: null, score: null, feedback: ""
-});
-const [perQuestion, setPerQuestion] = useState([]); // for the final report card
 
 
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
+  const [typingText, setTypingText] = useState("");
   const [step, setStep] = useState(-1);
   const [showUploads, setShowUploads] = useState(false);
   const [justAnswered, setJustAnswered] = useState(false);
@@ -181,6 +172,7 @@ const [perQuestion, setPerQuestion] = useState([]); // for the final report card
   const [disagreeFile, setDisagreeFile] = useState(null);
   const [user, setUser] = useState(null);
   const [showProgress, setShowProgress] = useState(false);
+  const [profile, setProfile] = useState(null);
   const [results, setResults] = useState(
     questions.map(q => ({
       answer: null,
@@ -193,13 +185,13 @@ const [perQuestion, setPerQuestion] = useState([]); // for the final report card
   );
 async function fetchSummary() {
         setTyping(true);
+        setTypingText("Generating assessment summary...");
         try {
-          const response = await fetchWithTimeout(`${BACKEND_URL}/api/session-summary`, {
+          const response = await fetch(`${BACKEND_URL}/api/session-summary`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email: user.email, sessionId }),
           });
-          
           const result = await response.json();
 		  
 		  console.log("Session summary API response:", result);
@@ -212,111 +204,15 @@ async function fetchSummary() {
   setSummary("No summary found.");
 }
 		  setScore(result?.score ?? 0);
-      setReportBreakdown(result?.detailedScores ?? []);
-      setPerQuestion(result?.perQuestion ?? []);     // <-- NEW
-      
+          setReportBreakdown(result?.detailedScores ?? []);
 
         } catch (err) {
           setSummary("Failed to generate summary. Please contact support.");
         }
         setTyping(false);
-              }
-      async function runQuestionReview(qIdx) {
-        if (!user?.email) return;
-        setQReview({ open: true, loading: true, qIdx, score: null, feedback: "" });
-      
-        const res = await fetchWithTimeout(`${BACKEND_URL}/api/question-review`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: user.email,
-            questionNumber: questions[qIdx].number,
-          }),
-        });
-        
-        const data = await res.json();
-      
-        setQReview({
-          open: true,
-          loading: false,
-          qIdx,
-          score: data?.score ?? null,
-          feedback: data?.feedback ?? "No feedback returned.",
-        });
-      
-        // persist the per-question score locally too
-        setResults(prev => {
-          const updated = [...prev];
-          updated[qIdx] = { ...updated[qIdx], questionScore: data?.score ?? null };
-          return updated;
-        });
+        setTypingText("");
       }
-      
-      async function acknowledgeQuestion(accept, comment) {
-        if (!qReview.open || qReview.qIdx == null) return;
-        const qNum = questions[qReview.qIdx].number;
-      
-        await fetchWithTimeout(`${BACKEND_URL}/api/question-acknowledge`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: user.email,
-            questionNumber: qNum,
-            accept,
-            comment: comment || "",
-          }),
-        });
-        
-      
-        if (accept) {
-          // lock in the score and continue to NEXT question
-          setQReview({ open: false, loading: false, qIdx: null, score: null, feedback: "" });
-          setResults(prev => {
-            const updated = [...prev];
-            if (updated[qReview.qIdx]) {
-              updated[qReview.qIdx].questionScore = qReview.score ?? updated[qReview.qIdx].questionScore;
-            }
-            return updated;
-          });
-          if (reviewMode) {
-            setReviewMode(false);
-            setStep(questions.length);
-          } else {
-            setStep(prev => prev + 1);
-          }
-          setJustAnswered(false);
-        } else {
-          // keep card open; user will upload improved file
-          setQReview(r => ({ ...r, loading: false }));
-        }
-      }
-      
-      async function reviseQuestionWithFile(file, userExplanation, ocrLang = "eng") {
-        if (!file || qReview.qIdx == null) return;
-        const qNum = questions[qReview.qIdx].number;
-        const form = new FormData();
-        form.append("file", file);
-        form.append("email", user.email);
-        form.append("questionNumber", qNum);
-        if (userExplanation?.trim()) form.append("userExplanation", userExplanation.trim());
-        form.append("ocrLang", ocrLang);
-      
-        setQReview(r => ({ ...r, loading: true }));
-        const resp = await fetchWithTimeout(`${BACKEND_URL}/api/review-answer`, { method: "POST", body: form });
-        const data = await resp.json();
-        setQReview(r => ({
-          ...r,
-          loading: false,
-          score: data?.score ?? r.score,
-          feedback: data?.feedback ?? r.feedback,
-        }));
-        setResults(prev => {
-          const updated = [...prev];
-          updated[qReview.qIdx] = { ...updated[qReview.qIdx], questionScore: data?.score ?? null };
-          return updated;
-        });
-      }
-      
+
 	  
 function ProgressPopup({ results, questions, onJump, onClose }) {
   return (
@@ -428,7 +324,22 @@ useEffect(() => {
     // eslint-disable-next-line
   }, [user]);
   
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => setProfile(data));
+    } else {
+      setProfile(null);
+    }
+  }, [user]);
   
+
+ 
+
   // --- Dialog logic ---
   function getBotMessage({ step, answer, justAnswered }) {
     if (step < 0) {
@@ -465,16 +376,16 @@ useEffect(() => {
 // --- Save answer to backend ---
 const saveAnswerToBackend = async (email, questionNumber, answer) => {
   try {
-    await fetchWithTimeout(`${BACKEND_URL}/api/save-answer`, {
+    await fetch(`${BACKEND_URL}/api/save-answer`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email.trim().toLowerCase(), questionNumber, answer })
+       body: JSON.stringify({ email: user.email.trim().toLowerCase(), questionNumber, answer })
     });
   } catch (err) {
     console.error("Failed to save answer:", err);
   }
 };
-
+ 
 
   // --- Auto-scroll chat to bottom whenever messages or typing changes ---
   useEffect(() => {
@@ -568,7 +479,7 @@ if (!user) {
         margin: "0px auto",
 		paddingTop: 40,
         fontFamily: "Inter, sans-serif",
-        backgroundColor: "transparent",   // GPT gray
+        background: "#f7f8fa;",   // GPT gray
         minHeight: "100vh",
       }}
     >
@@ -651,7 +562,7 @@ if (!user) {
   questions={questions}
   onJump={(qIdx, reqIdx) => {
     setStep(qIdx);
-    setUploadReqIdx(reqIdx ?? 0);
+    setUploadReqIdx(reqIdx || 0);
     setShowUploads(true);
     setShowSummary(false);
     setReviewMode(false);
@@ -753,31 +664,19 @@ if (!user) {
   <FinalReportCard
     questions={questions}
     breakdown={reportBreakdown}
-    perQuestion={perQuestion} 
     summary={summary}
     score={score}
 	onRetry={() => {
       // Re-trigger the summary fetch
       setSummary("");
       setTyping(true);
+      setTypingText("Regenerating summary...");
       // Your summary-fetch logic here (see below)
       fetchSummary();
     }}
   />
 )}
-         {qReview.open && (
-  <QuestionReviewCard
-    question={questions[qReview.qIdx]}
-    score={qReview.score}
-    feedback={qReview.feedback}
-    loading={qReview.loading}
-    onAccept={(comment) => acknowledgeQuestion(true, comment)}
-    onRequestRevision={(comment) => acknowledgeQuestion(false, comment)}
-    onUpload={(file, note, lang) => reviseQuestionWithFile(file, note, lang)}
-    onClose={() => setQReview({ open:false, loading:false, qIdx:null, score:null, feedback:"" })}
-  />
-)}
-
+         
       {/* UPLOAD SECTION */}
       {showUploads && step < questions.length && (
         <UploadSection
@@ -787,9 +686,14 @@ if (!user) {
   onDone={() => {
     setShowUploads(false);
     setUploadReqIdx(0);
-    runQuestionReview(step);               // <-- NEW: open mid-step card
+    if (reviewMode) {
+      setReviewMode(false);
+      setStep(questions.length);
+    } else {
+      setStep((prev) => prev + 1);
+    }
+    setJustAnswered(false);
   }}
-  
   email={user.email}
   sessionId={sessionId}
   questionNumber={questions[step].number}
@@ -810,7 +714,7 @@ if (!user) {
   disagreeLoading={disagreeLoading}
   setDisagreeLoading={setDisagreeLoading}
   results={results}
-  setResults={setResults} 
+  setResults={setResults}
 />
 
       )}
@@ -818,7 +722,6 @@ if (!user) {
       {/* YES/NO BUTTONS */}
       {!typing &&
         !showUploads &&
-        !qReview.open &&    
         step >= 0 &&
         step < questions.length &&
         messages.length > 0 &&
@@ -912,48 +815,7 @@ function UploadSection({
 const [isDragActive, setIsDragActive] = useState(false);
 const [ocrLang, setOcrLang] = useState("eng");
 const [lastFile, setLastFile] = useState(null);
-const [preview, setPreview] = useState(null); // { preview, company, lang }
 
-// --- advanced extraction flags (frontend -> backend) ---
-const [deepScan, setDeepScan] = useState(true);
-const [forceOCR, setForceOCR] = useState(false);
-const [renderDPI, setRenderDPI] = useState(220);
-const [extractSignatures, setExtractSignatures] = useState(true);
-const [autoRescanOnWeak, setAutoRescanOnWeak] = useState(true);
-const [forceNextDeepScan, setForceNextDeepScan] = useState(false);
-// simple drawer for rarely used options
-const [showAdvanced, setShowAdvanced] = useState(false);
-  // Reset UI when requirement or question changes
-  useEffect(() => {
-    setError("");
-    setUploaded(false);
-    setAccepted(false);
-    setLastFile(null);
-    setPreview(null);
-  }, [requirementIdx, questionNumber]);
-async function previewDocQuick(file) {
-  const fd = new FormData();
-  fd.append("file", file);
-  fd.append("lang", ocrLang);
-  fd.append("dpi", "200");
-
-  try {
-    const res = await fetchWithTimeout(`${BACKEND_URL}/upload`, { method: "POST", body: fd });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.error || "Preview failed");
-    setPreview({ preview: data.preview, company: data.company, lang: data.lang });
-  } catch (e) {
-    setPreview({ preview: `Preview failed: ${e.message}`, company: "", lang: ocrLang });
-  }
-}
-
-async function setSupplierName(email, supplierName) {
-  await fetch(`${BACKEND_URL}/api/set-supplier-name`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, supplierName }),
-  });
-}
 
 // *** ADD THIS useEffect ***
 useEffect(() => {
@@ -972,12 +834,11 @@ useEffect(() => {
     }
   }
   window.addEventListener("vendorIQ:retryUpload", onRetryUpload);
-  
   return () => window.removeEventListener("vendorIQ:retryUpload", onRetryUpload);
 }, [email, questionNumber, requirement]); // dependencies must match current upload context
 
   const handleUpload = async (e) => {
-  const file = e?.target?.files?.[0];
+  const file = e.target.files[0];
   setLastFile(file);
   if (!file) return;
   setUploading(true);
@@ -992,162 +853,80 @@ useEffect(() => {
     return;
   }
 
-// 2. Send to backend for AI review (with timeout) 
-try {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("requirement", requirement);
-  formData.append("email", email);
-  formData.append("questionNumber", questionNumber);
-  formData.append("companyName", companyName);
-  formData.append("ocrLang", ocrLang);
-
-  // If this is the LAST requirement for the question, ask backend to finalize the question-level review too.
-  const isLastReq = requirementIdx === (question.requirements.length - 1);
-  if (isLastReq) formData.append("finalizeQuestion", "true");
-
-// NEW: send advanced extraction flags
-// Default to deep scan; Smart Rescan can force it on for one run.
-const wantDeepScan = forceNextDeepScan || (showAdvanced ? deepScan : true);
-// Also force OCR when Smart Rescan is triggered (one-shot)
-const wantForceOCR = forceNextDeepScan || (showAdvanced ? forceOCR : false);
-
-
-formData.append("deepScan", String(wantDeepScan));
-formData.append("forceOCR", String(wantForceOCR));
-formData.append("renderDPI", String(renderDPI));
-formData.append("extractSignatures", String(extractSignatures));
-
-// --- send to backend ---
-const response = await fetchWithTimeout(
-  `${BACKEND_URL}/api/check-file`,
-  { method: "POST", body: formData }
-);
-
-let data = await response.json();
-if (!response.ok) {
-  throw new Error(data?.feedback || data?.error || "AI review failed");
-}
-
-// one-shot override consumed (and avoid leaving Force OCR checked later)
-if (forceNextDeepScan) {
-  setForceNextDeepScan(false);
-  setForceOCR(false);
-}
-
-// Optional UX gates
-if (data.requireCompanyNameConfirmation) {
-  setError(
-    `Document does not clearly mention your registered company name.\n` +
-    `Registered: ${companyName || "(none)"}\n` +
-    (data.detectedCompanyName ? `Detected in file: ${data.detectedCompanyName}\n` : "") +
-    `Please re-upload a document that includes the correct name, or fix your profile name.`
-  );
-  setUploading(false);
-  return;
-}
-
-const fb = (data.feedback_no_score || data.feedback || "").toLowerCase();
-if (data.requireFileRetry || fb.includes("could not be read")) {
-  setError(
-    "Upload failed: File unreadable. Please try a different file or format (e.g., scan to JPG/PNG, or export/print to PDF)."
-  );
-  setUploading(false);
-  return;
-}
-
-
-// Auto-rescan once if first pass looks weak and we didn't already force OCR
-let didAutoRescan = false;
-if (
-  autoRescanOnWeak &&
-  !wantForceOCR &&
-  lastFile &&
-  (
-    (typeof data.score === "number" && data.score <= 2) ||
-    /\b(signature|signed email|email body|gmail|outlook)\b/i.test(fb)
-  )
-) {
-  const retryFd = new FormData();
-  retryFd.append("file", lastFile);
-  retryFd.append("requirement", requirement);
-  retryFd.append("email", email);
-  retryFd.append("questionNumber", questionNumber);
-  retryFd.append("companyName", companyName);
-  retryFd.append("ocrLang", ocrLang);
-  retryFd.append("deepScan", "true");
-  retryFd.append("forceOCR", "true");
-  retryFd.append("renderDPI", String(renderDPI || 220));
-  retryFd.append("extractSignatures", "true");
-
+  // 2. Send to Ollama for AI feedback
   try {
-    const retryResp = await fetchWithTimeout(`${BACKEND_URL}/api/check-file`, { method: "POST", body: retryFd });
-    const retryData = await retryResp.json();
-    if (retryResp.ok) { data = retryData; didAutoRescan = true; }
-  } catch {}
-}
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("requirement", requirement);
+    formData.append("email", email);
+    formData.append("questionNumber", questionNumber);
+    formData.append("companyName", companyName);
+    formData.append("ocrLang", ocrLang); // <-- ADD THIS LINE
+    const response = await fetch(`${BACKEND_URL}/api/check-file`, {
+      method: "POST",
+      body: formData,
+    });
 
+    if (!response.ok) throw new Error("AI review failed");
+    const data = await response.json();
+	
+	 if (
+    data.requireFileRetry ||
+    (typeof data.feedback === "string" &&
+      data.feedback.toLowerCase().includes("could not be read"))
+  ) {
+    setError(
+      "Upload failed: File unreadable. Please try a different file or format (for example, scan to JPG/PNG, or convert to DOCX/PDF)."
+    );
+    setUploading(false);
+    return;
+  }
 
-// Build bubble (with extras if present)
-const body = data.feedback_no_score || data.feedback || "No feedback received.";
-const scoreText = (typeof data.score === "number") ? `**Score:** ${data.score}/5\n\n` : "";
+    // 3. Build bubble message (requirement + feedback)
+    const botBubble = 
+      `🧾 **Question ${questionNumber}, Requirement ${requirementIdx + 1}:**\n\n` +
+      `**Requirement:**\n${requirement}\n\n` +
+      `**AI Review:**\n${data.feedback || "No feedback received."}`;
 
-const extras = [];
-extras.push(`**Mode:** ${wantDeepScan ? "Smart Deep Scan" : "Text-only"}`);
-if (data.signature_info?.count) {
-  extras.push(`**Signatures found:** ${data.signature_info.count}` + (data.signature_info.names?.length ? ` (e.g., ${data.signature_info.names.slice(0,2).join(", ")})` : ""));
-}
-if (Array.isArray(data.policy_headings) && data.policy_headings.length) {
-  extras.push(`**Detected headings:** ${data.policy_headings.slice(0,4).join(" • ")}`);
-}
-if (typeof data.company_name_in_doc === "string") {
-  extras.push(`**Company detected in policy:** ${data.company_name_in_doc || "—"}`);
-}
-if (didAutoRescan) {
-  extras.push("_Auto-rescanned with deep OCR due to weak first pass._");
-}
+    setMessages(prev => [...prev, { from: "bot", text: botBubble }]);
+    setUploaded(true);
+    setAccepted(false);
 
-const botBubble =
-  `🧾 **Question ${questionNumber}, Requirement ${requirementIdx + 1}:**\n\n` +
-  `**Requirement:**\n${requirement}\n\n` +
-  `${scoreText}${body}` +
-  (extras.length ? `\n\n${extras.map(x => `• ${x}`).join("\n")}` : "");
-
-
-  setMessages(prev => [...prev, { from: "bot", text: botBubble }]);
-  setUploaded(true);
-  setAccepted(false);
-
-  // Store per-requirement result (no double "Score:" line)
-  setResults(prev => {
-    const updated = [...prev];
-    updated[questionNumber - 1].requirements[requirementIdx] = {
-      aiScore: data.score ?? null,
-      aiFeedback: data.feedback_no_score || data.feedback || ""
-    };
-    return updated;
-  });
-
-  // If backend also returned a questionSummary (because we set finalizeQuestion=true), stash it for display later if you want.
-  // (Optional) You already call runQuestionReview() after all requirements—see Patch #4.
-} catch (err) {
-  setError("AI review failed: " + err.message);
-}
-
+    // Set result for this requirement
+    setResults(prev => {
+      const updated = [...prev];
+      updated[questionNumber - 1].requirements[requirementIdx] = {
+        aiScore: data.score || null,
+        aiFeedback: data.feedback || ""
+      };
+      return updated;
+    });
+  } catch (err) {
+    setError("AI review failed: " + err.message);
+  }
   setUploading(false);
 };
 
 const handleAccept = () => {
+  // If there are more requirements for this question, go to the next requirement
   if (requirementIdx < question.requirements.length - 1) {
-    setUploadReqIdx(requirementIdx + 1);
-    setUploaded(false);
-    setAccepted(false);
+    setUploadReqIdx(requirementIdx + 1);    // Move to next requirement
+    setUploaded(false);                     // Reset upload for new requirement
+    setAccepted(false);                    
+    // Do NOT hide the uploads section
   } else {
-    // All requirements done -> open the question-level review (mid-step)
-    onDone?.(); // this calls runQuestionReview(step) in the parent
+    // All requirements done, move to next question
+    setShowUploads(false);
+    setUploadReqIdx(0);
+    if (reviewMode) {
+      setReviewMode(false);
+      setStep(questions.length);
+    } else {
+      setStep((prev) => prev + 1);
+    }
+    setJustAnswered(false);
   }
 };
-
 
 const submitDisagreement = async () => {
   setDisagreeLoading(true);
@@ -1162,7 +941,7 @@ const submitDisagreement = async () => {
       formData.append("file", disagreeFile);
     }
 
-    const res = await fetchWithTimeout(`${BACKEND_URL}/api/disagree-feedback`, {
+    const res = await fetch(`${BACKEND_URL}/api/disagree-feedback`, {
       method: "POST",
       body: formData,
     });
@@ -1276,7 +1055,7 @@ return (
             <input
               id="disagree-file"
               type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.txt"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
               onChange={e => setDisagreeFile(e.target.files[0])}
               style={{ display: "none" }}
             />
@@ -1391,95 +1170,38 @@ return (
         >
         </div>
         <div style={{ marginBottom: 10 }}>
-  <div style={{ fontWeight: 700, color: "#cfe6ff", marginBottom: 6 }}>
-    We’ll run a <span style={{ color:"#fff" }}>Smart Deep Scan</span> automatically
-  </div>
-  <div style={{ color:"#d6e9ff", fontSize: "0.85rem", marginBottom: 8 }}>
-    Finds policy titles, headings, stamps/signatures, and hidden text.
-  </div>
-
-  <label htmlFor="ocr-lang" style={{ marginRight: 8, fontWeight: 500, color: "#cfe6ff" }}>
-    Document language (for OCR):
+  <label htmlFor="ocr-lang" style={{ marginRight: 8, fontWeight: 500, color: "#0085CA" }}>
+    Select language for document text:
   </label>
   <select
     id="ocr-lang"
     value={ocrLang}
     onChange={e => setOcrLang(e.target.value)}
-    style={{ border: "1.5px solid #b3d6f8", borderRadius: 7, padding: "3px 12px", fontSize: "0.9rem", color:"#333", background:"#fff" }}
+    style={{
+      border: "1.5px solid #b3d6f8",
+      borderRadius: 7,
+      padding: "3px 12px",
+      fontSize: "0.9rem",
+      color: "#333",
+    }}
   >
     <option value="eng">English</option>
     <option value="ind">Bahasa Indonesia</option>
     <option value="vie">Vietnamese</option>
     <option value="tha">Thai</option>
-    <option value="hi">Hindi</option>
+    {/* Add more as needed */}
   </select>
-
-  {/* Advanced options (optional) */}
-  <div style={{ marginTop: 10 }}>
-    <button
-      type="button"
-      onClick={() => setShowAdvanced(v => !v)}
-      style={{ background:"transparent", color:"#cfe6ff", border:"1px dashed #8fc8ff", borderRadius:8, padding:"6px 10px", fontSize:"0.85rem", cursor:"pointer" }}
-      aria-expanded={showAdvanced}
-    >
-      {showAdvanced ? "▲ Hide Advanced" : "▼ Advanced (optional)"}
-    </button>
-
-    {showAdvanced && (
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginTop:10, color:"#cfe6ff", background:"#435262", border:"1px solid #8fc8ff33", borderRadius:10, padding:12 }}>
-        <label style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <input type="checkbox" checked={extractSignatures} onChange={e=>setExtractSignatures(e.target.checked)} />
-          Detect signatures / stamps
-        </label>
-        <label style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <input type="checkbox" checked={forceOCR} onChange={e=>setForceOCR(e.target.checked)} />
-          Force OCR (ignore embedded text)
-        </label>
-        <label style={{ display:"flex", alignItems:"center", gap:8 }}>
-          OCR quality (DPI):&nbsp;
-          <input
-            type="number"
-            min={150}
-            max={300}
-            value={renderDPI}
-            onChange={e=>setRenderDPI(Number(e.target.value||220))}
-            style={{ width:70, border:"1px solid #b3d6f8", borderRadius:7, padding:"2px 6px", background:"#fff", color:"#333" }}
-          />
-        </label>
-        <label style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <input type="checkbox" checked={autoRescanOnWeak} onChange={e => setAutoRescanOnWeak(e.target.checked)} />
-          Auto-rescan on weak score
-        </label>
-      </div>
-    )}
-  </div>
 </div>
-
-
-        {preview && (
-          <div style={{ marginTop: 10, background: "#f8fafd", padding: 10, borderRadius: 8, maxWidth: 500 }}>
-            <div style={{ fontWeight: 700, marginBottom: 6, color: "#0085CA" }}>Quick Preview</div>
-            <div style={{ fontSize: "0.8rem", color: "#555", marginBottom: 6 }}>
-              Detected company: <b>{preview.company || "—"}</b> &nbsp;•&nbsp; OCR lang: <b>{preview.lang}</b>
-            </div>
-            <div style={{ maxHeight: 120, overflow: "auto", whiteSpace: "pre-wrap", fontSize: "0.8rem" }}>
-              {preview.preview || "—"}
-            </div>
-          </div>
-        )}
 
         <label className="browse-btn" style={{ marginTop: 12 }}>
           📁 Browse File
           <input
-  type="file"
-  accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff"
-  onChange={(e) => {
-    const f = e.target.files?.[0];
-    if (f) previewDocQuick(f);
-    handleUpload(e);
-  }}
-  hidden
-/>
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt"
+            onChange={handleUpload}
+            disabled={uploading}
+            hidden
+          />
         </label>
         <button
           className="skip-btn"
@@ -1519,11 +1241,10 @@ return (
     {error && (
   <div style={{ color: "red", marginTop: 12 }}>
     {error}
-    {(/AI review failed/i.test(error) || /unreadable/i.test(error)) && lastFile && (
-  <>
-    <button
-      onClick={() => handleUpload({ target: { files: [lastFile] } })}
-      disabled={uploading}
+    {error.includes("AI review failed") && lastFile && (
+      <button
+        onClick={() => handleUpload({ target: { files: [lastFile] } })}
+        disabled={uploading}
 		style={{
           marginLeft: 14,
           background: "#0085CA",
@@ -1539,30 +1260,7 @@ return (
       >
         Retry AI Review
       </button>
-<button
-      onClick={() => {
-        setForceNextDeepScan(true);
-        setForceOCR(true);
-        setExtractSignatures(true);
-        setTimeout(() => handleUpload({ target: { files: [lastFile] } }), 0);
-      }}
-      disabled={uploading}
-      style={{
-        marginLeft: 10,
-        background: "#ffbf00",
-        color: "#222",
-        border: "none",
-        borderRadius: 7,
-        padding: "7px 18px",
-        fontWeight: 700,
-        fontSize: "0.95rem",
-        cursor: "pointer"
-      }}
-    >
-      Smart Rescan (OCR + Signatures)
-    </button>
-  </>
-)}
+    )}
   </div>
 )}
 
@@ -1603,7 +1301,7 @@ function cleanSummary(summary) {
   return summary;
 }
 
-function FinalReportCard({ questions, breakdown, perQuestion = [], summary, score, onRetry }) {
+function FinalReportCard({ questions, breakdown, summary, score, onRetry }) {
 	const thStyle = {
   padding: "7px 8px",
   background: "#e7f4fc",
@@ -1636,8 +1334,30 @@ const cleanedSummary = cleanSummary(summary);
     });
   };
 
+  // === 6. Helper for formatting summary (as before) ===
+  function formatSummary(summary) {
+    if (!summary) return "";
 
-    return (
+    if (typeof summary === "object") {
+      let str = "";
+      if (Array.isArray(summary.strengths) && summary.strengths.length) {
+        str += "**Strengths:**\n";
+        for (const s of summary.strengths) str += `- ${s}\n`;
+      }
+      if (Array.isArray(summary.weaknesses) && summary.weaknesses.length) {
+        if (str) str += "\n";
+        str += "**Weaknesses:**\n";
+        for (const w of summary.weaknesses) str += `- ${w}\n`;
+      }
+      if (str) return str.trim();
+      // If no strengths/weaknesses, just show the JSON object
+      return JSON.stringify(summary, null, 2);
+    }
+    // Otherwise, it's just a string
+    return summary;
+  }
+
+  return (
     <div
       style={{
         background: "#fff",
@@ -1655,31 +1375,6 @@ const cleanedSummary = cleanSummary(summary);
         <h3 style={{ color: "#0085CA", marginTop: 0 }}>
           <span role="img" aria-label="report">📝</span> Compliance Report Card
         </h3>
-                {/* Per-Question Scores */}
-                <table style={{ width: "100%", margin: "6px 0 14px 0", borderCollapse: "collapse", background: "#fafcff", fontSize: "0.8rem" }}>
-                  <thead>
-                    <tr style={{ background: "#f0faff" }}>
-                      <th style={{ padding: 6, border: "1px solid #eee" }}>Q#</th>
-                      <th style={{ padding: 6, border: "1px solid #eee" }}>Question</th>
-                      <th style={{ padding: 6, border: "1px solid #eee" }}>Question Score</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {questions.map((q, i) => (
-                      <tr key={q.number}>
-                        <td style={{ padding: 6, border: "1px solid #eee" }}>{q.number}</td>
-                        <td style={{ padding: 6, border: "1px solid #eee" }}>{q.text.slice(0, 52)}...</td>
-                        <td style={{ padding: 6, border: "1px solid #eee" }}>
-                          {perQuestion?.[i]?.questionLevelScore != null
-                            ? `${perQuestion[i].questionLevelScore}/5`
-                            : (typeof breakdown?.[i]?.numeric_score === "number"
-                                ? `${breakdown[i].numeric_score}/5`
-                                : "—")}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
                 <table style={{ width: "100%", marginBottom: 16, borderCollapse: "collapse", background: "#f3f4f6", fontSize: "0.7rem" }}>
           <thead>
             <tr style={{ background: "#f0faff" }}>
@@ -1893,137 +1588,6 @@ function ReviewCard({ answers, questions, onRevise, onContinue }) {
         >
           Submit & See Final Summary
         </button>
-      </div>
-    </div>
-  );
-}
-function QuestionReviewCard({
-  question,
-  score,
-  feedback,
-  loading,
-  onAccept,
-  onRequestRevision,
-  onUpload,
-  onClose,
-}) {
-  const [comment, setComment] = useState("");
-  const [file, setFile] = useState(null);
-  const [note, setNote] = useState("");
-  const [ocrLang, setOcrLang] = useState("eng");
-
-  return (
-    <div
-      style={{
-        background: "#fff",
-        borderRadius: 14,
-        margin: "22px auto 0 auto",
-        padding: "22px 18px",
-        maxWidth: 650,
-        boxShadow: "0 2px 12px #0001",
-        color: "#223",
-        fontSize: "0.9rem",
-        textAlign: "left",
-        border: "1.5px solid #e8f3ff"
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h3 style={{ color: "#0085CA", margin: 0 }}>
-          🧮 Question-level Review
-        </h3>
-        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer" }}>×</button>
-      </div>
-
-      <div style={{ marginTop: 8, fontWeight: 600 }}>
-        {question ? question.text : "—"}
-      </div>
-
-      <div style={{ marginTop: 10 }}>
-        <span style={{
-          display: "inline-block",
-          background: "#f0faff",
-          border: "1px solid #bfe3ff",
-          color: "#0b6aa7",
-          padding: "4px 10px",
-          borderRadius: 8,
-          fontWeight: 700
-        }}>
-          Question Score: {score != null ? `${score}/5` : "—"}
-        </span>
-      </div>
-
-      <div style={{ marginTop: 14, background: "#f8fafd", padding: 12, borderRadius: 8 }}>
-        <strong>AI Feedback</strong>
-        <div style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>
-          <ReactMarkdown>{feedback || "No feedback."}</ReactMarkdown>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-        <input
-          type="text"
-          placeholder="Optional comment"
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          style={{ flex: 1, border: "1px solid #e0e0e0", borderRadius: 7, padding: "8px 10px" }}
-        />
-        <button
-          onClick={() => onAccept(comment)}
-          disabled={loading}
-          style={{ background: "#3AB66B", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 700, cursor: "pointer" }}
-        >
-          {loading ? "Saving..." : "Accept & Continue"}
-        </button>
-        <button
-          onClick={() => onRequestRevision(comment)}
-          disabled={loading}
-          style={{ background: "#ffbf00", color: "#222", border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 700, cursor: "pointer" }}
-        >
-          {loading ? "…" : "Request Revision"}
-        </button>
-      </div>
-
-      <div style={{ marginTop: 16, borderTop: "1px dashed #d7e9ff", paddingTop: 12 }}>
-        <div style={{ fontWeight: 700, marginBottom: 6 }}>Improve & Reupload for this Question</div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <label style={{ background: "#e3f2fd", border: "1.5px solid #e0e0e0", borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}>
-            📁 Choose File
-            <input
-
-type="file"
-accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff"
-onChange={(e) => setFile(e.target.files?.[0] || null)}
-hidden
-/>
-
-
-          </label>
-          <select
-            value={ocrLang}
-            onChange={(e) => setOcrLang(e.target.value)}
-            style={{ border: "1.5px solid #b3d6f8", borderRadius: 7, padding: "4px 10px" }}
-            title="OCR language (for scanned docs)"
-          >
-            <option value="eng">English</option>
-            <option value="ind">Bahasa Indonesia</option>
-            <option value="vie">Vietnamese</option>
-            <option value="tha">Thai</option>
-          </select>
-          <input
-            type="text"
-            placeholder="Optional note to auditor"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            style={{ flex: 1, minWidth: 180, border: "1px solid #e0e0e0", borderRadius: 7, padding: "6px 9px" }}
-          />
-          <button
-            onClick={() => file && onUpload(file, note, ocrLang)}
-            disabled={!file || loading}
-            style={{ background: "#229cf9", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontWeight: 700, cursor: file && !loading ? "pointer" : "not-allowed" }}
-          >
-            {loading ? "Uploading..." : "Reupload for Re-score"}
-          </button>
-        </div>
       </div>
     </div>
   );
