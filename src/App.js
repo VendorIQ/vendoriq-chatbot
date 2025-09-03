@@ -16,7 +16,6 @@ const supabase = createClient(
 
 // --- CONSTANTS ---
 const botAvatar = process.env.PUBLIC_URL + "/bot-avatar.png";
-const userAvatar = process.env.PUBLIC_URL + "/user-avatar.png";
 const BACKEND_URL = "https://4d66d45e-0288-4203-935e-1c5d2a182bde-00-38ratc2twzear.pike.replit.dev";
 
 // --- QUESTIONS ---
@@ -163,7 +162,6 @@ const [perQuestion, setPerQuestion] = useState([]); // for the final report card
 
   const [messages, setMessages] = useState([]);
   const [typing, setTyping] = useState(false);
-  const [typingText, setTypingText] = useState("");
   const [step, setStep] = useState(-1);
   const [showUploads, setShowUploads] = useState(false);
   const [justAnswered, setJustAnswered] = useState(false);
@@ -183,7 +181,6 @@ const [perQuestion, setPerQuestion] = useState([]); // for the final report card
   const [disagreeFile, setDisagreeFile] = useState(null);
   const [user, setUser] = useState(null);
   const [showProgress, setShowProgress] = useState(false);
-  const [profile, setProfile] = useState(null);
   const [results, setResults] = useState(
     questions.map(q => ({
       answer: null,
@@ -196,7 +193,6 @@ const [perQuestion, setPerQuestion] = useState([]); // for the final report card
   );
 async function fetchSummary() {
         setTyping(true);
-        setTypingText("Generating assessment summary...");
         try {
           const response = await fetchWithTimeout(`${BACKEND_URL}/api/session-summary`, {
             method: "POST",
@@ -224,8 +220,7 @@ async function fetchSummary() {
           setSummary("Failed to generate summary. Please contact support.");
         }
         setTyping(false);
-        setTypingText("");
-      }
+              }
       async function runQuestionReview(qIdx) {
         if (!user?.email) return;
         setQReview({ open: true, loading: true, qIdx, score: null, feedback: "" });
@@ -433,22 +428,7 @@ useEffect(() => {
     // eslint-disable-next-line
   }, [user]);
   
-  useEffect(() => {
-    if (user) {
-      supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single()
-        .then(({ data }) => setProfile(data));
-    } else {
-      setProfile(null);
-    }
-  }, [user]);
   
-
- 
-
   // --- Dialog logic ---
   function getBotMessage({ step, answer, justAnswered }) {
     if (step < 0) {
@@ -671,7 +651,7 @@ if (!user) {
   questions={questions}
   onJump={(qIdx, reqIdx) => {
     setStep(qIdx);
-    setUploadReqIdx(reqIdx || 0);
+    setUploadReqIdx(reqIdx ?? 0);
     setShowUploads(true);
     setShowSummary(false);
     setReviewMode(false);
@@ -780,7 +760,6 @@ if (!user) {
       // Re-trigger the summary fetch
       setSummary("");
       setTyping(true);
-      setTypingText("Regenerating summary...");
       // Your summary-fetch logic here (see below)
       fetchSummary();
     }}
@@ -831,7 +810,7 @@ if (!user) {
   disagreeLoading={disagreeLoading}
   setDisagreeLoading={setDisagreeLoading}
   results={results}
-  setResults={setResults}
+  setResults={setResults} 
 />
 
       )}
@@ -944,7 +923,14 @@ const [autoRescanOnWeak, setAutoRescanOnWeak] = useState(true);
 const [forceNextDeepScan, setForceNextDeepScan] = useState(false);
 // simple drawer for rarely used options
 const [showAdvanced, setShowAdvanced] = useState(false);
-
+  // Reset UI when requirement or question changes
+  useEffect(() => {
+    setError("");
+    setUploaded(false);
+    setAccepted(false);
+    setLastFile(null);
+    setPreview(null);
+  }, [requirementIdx, questionNumber]);
 async function previewDocQuick(file) {
   const fd = new FormData();
   fd.append("file", file);
@@ -1023,7 +1009,8 @@ try {
 // NEW: send advanced extraction flags
 // Default to deep scan; Smart Rescan can force it on for one run.
 const wantDeepScan = forceNextDeepScan || (showAdvanced ? deepScan : true);
-const wantForceOCR = showAdvanced ? forceOCR : false;
+// Also force OCR when Smart Rescan is triggered (one-shot)
+const wantForceOCR = forceNextDeepScan || (showAdvanced ? forceOCR : false);
 
 
 formData.append("deepScan", String(wantDeepScan));
@@ -1042,8 +1029,11 @@ if (!response.ok) {
   throw new Error(data?.feedback || data?.error || "AI review failed");
 }
 
-// one-shot override consumed
-setForceNextDeepScan(false);
+// one-shot override consumed (and avoid leaving Force OCR checked later)
+if (forceNextDeepScan) {
+  setForceNextDeepScan(false);
+  setForceOCR(false);
+}
 
 // Optional UX gates
 if (data.requireCompanyNameConfirmation) {
@@ -1646,30 +1636,8 @@ const cleanedSummary = cleanSummary(summary);
     });
   };
 
-  // === 6. Helper for formatting summary (as before) ===
-  function formatSummary(summary) {
-    if (!summary) return "";
 
-    if (typeof summary === "object") {
-      let str = "";
-      if (Array.isArray(summary.strengths) && summary.strengths.length) {
-        str += "**Strengths:**\n";
-        for (const s of summary.strengths) str += `- ${s}\n`;
-      }
-      if (Array.isArray(summary.weaknesses) && summary.weaknesses.length) {
-        if (str) str += "\n";
-        str += "**Weaknesses:**\n";
-        for (const w of summary.weaknesses) str += `- ${w}\n`;
-      }
-      if (str) return str.trim();
-      // If no strengths/weaknesses, just show the JSON object
-      return JSON.stringify(summary, null, 2);
-    }
-    // Otherwise, it's just a string
-    return summary;
-  }
-
-  return (
+    return (
     <div
       style={{
         background: "#fff",
